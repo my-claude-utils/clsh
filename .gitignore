@@ -43,8 +43,9 @@ coverage/
 *.mp4
 *.mov
 *.avi
-# Exception: landing page video
-!apps/landing/setup-flow.mp4
+
+# Landing page (deployed separately to Cloudflare Pages)
+apps/landing/
 
 # Demo video generator (Remotion — 500MB+ with deps)
 apps/demo-video/

@@ -27,8 +27,7 @@
     "developer-tools"
   ],
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "packages/*"
   ],
   "scripts": {
     "dev": "turbo run dev --filter=@clsh/agent --filter=@clsh/web --parallel --log-prefix=none --log-order=stream --verbosity=0",
