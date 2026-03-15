@@ -185,7 +185,7 @@ export const tmuxScript: DemoScript = {
   steps: [
     // Startup
     { delay: 600, output: TMUX_PROMPT },
-    { delay: 300, type: 'npm run dev', speed: 50 },
+    { delay: 300, type: 'npx clsh', speed: 50 },
     {
       delay: 400,
       output: [

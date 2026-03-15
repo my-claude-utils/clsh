@@ -157,7 +157,7 @@ export function AuthScreen({ auth, onBootstrapSubmit }: AuthScreenProps) {
           )}
 
           <p className="mt-6 text-center text-xs text-neutral-600">
-            Run <code className="text-neutral-400">npm run dev</code> on your Mac and scan the QR code, or copy the token from the terminal output.
+            Run <code className="text-neutral-400">npx clsh</code> on your Mac and scan the QR code, or copy the token from the terminal output.
           </p>
         </div>
       </div>

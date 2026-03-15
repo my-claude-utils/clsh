@@ -13,7 +13,7 @@
 
 ## Testing Checklist
 
-- [ ] Tested locally with `npm run dev`
+- [ ] Tested locally with `npx clsh` (or `npm run dev` for development)
 - [ ] Lint passes (`npm run lint`)
 - [ ] Type checking passes (`npm run typecheck`)
 - [ ] Build succeeds (`npm run build`)

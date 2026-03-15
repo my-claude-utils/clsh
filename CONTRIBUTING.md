@@ -2,6 +2,8 @@
 
 Thanks for your interest in contributing to clsh! This guide will help you get set up and understand how we work.
 
+> **Not a contributor?** Just want to use clsh? Run `npx clsh` and you're done. See the [README](README.md) for details.
+
 ## Development Setup
 
 ```bash

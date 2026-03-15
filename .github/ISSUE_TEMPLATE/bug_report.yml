@@ -41,9 +41,9 @@ body:
       label: Steps to Reproduce
       description: Detailed steps to reproduce the issue.
       placeholder: |
-        1. Run `npm run dev`
-        2. Open the browser at localhost:4031
-        3. Click on the tmux tab
+        1. Run `npx clsh`
+        2. Scan QR code or open the browser at localhost:4031
+        3. Click on a session card
         4. ...
     validations:
       required: true

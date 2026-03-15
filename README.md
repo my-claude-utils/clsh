@@ -43,7 +43,7 @@ A real PTY on your machine, streamed to your pocket.
 
 ## What is clsh?
 
-clsh gives you real terminal access to your Mac from your phone. Clone, install, run — scan the QR code and you're in. Multiple live terminal sessions, a custom keyboard built for terminal use, 6 keyboard skins, and session management. Open source, zero config.
+clsh gives you real terminal access to your Mac from your phone. One command, scan the QR code, and you're in. Multiple live terminal sessions, a custom keyboard built for terminal use, 6 keyboard skins, and session management. Open source, zero config.
 
 **Key highlights:**
 
@@ -58,13 +58,20 @@ clsh gives you real terminal access to your Mac from your phone. Clone, install,
 > **Requires [Node.js 20+](https://nodejs.org)** and macOS or Linux.
 
 ```bash
-git clone https://github.com/my-claude-utils/clsh.git
-cd clsh
-npm install
-npm run dev
+npx clsh
 ```
 
 A QR code prints to the console. Scan it on your phone. That's it.
+
+### Permanent URL (optional)
+
+For a static URL that survives restarts (perfect for PWA home screen):
+
+```bash
+npx clsh setup
+```
+
+See the [ngrok setup guide](docs/ngrok-setup.md) for details.
 
 ## How It Works
 
@@ -86,7 +93,7 @@ A QR code prints to the console. Scan it on your phone. That's it.
   └──────────────────────┘
 ```
 
-1. `npm run dev` starts the backend agent + React frontend
+1. `npx clsh` starts the backend agent + React frontend
 2. The agent spawns real terminal sessions via `node-pty`
 3. When tmux is installed, sessions are wrapped in tmux for **persistence** — they survive server restarts
 4. A tunnel (ngrok, SSH, or Wi-Fi) exposes the agent over HTTPS
@@ -130,7 +137,7 @@ A QR code prints to the console. Scan it on your phone. That's it.
 ### Zero-config (default)
 
 ```bash
-npm run dev
+npx clsh
 ```
 
 Connects through [localhost.run](https://localhost.run) — a free SSH tunnel. **No signup, no tokens.** A QR code prints to the console with the HTTPS URL.
@@ -159,13 +166,13 @@ If no tunnel works, clsh falls back to your local IP. Same LAN only.
 ### Force a specific tunnel
 
 ```bash
-TUNNEL=ssh npm run dev     # force SSH tunnel
-TUNNEL=local npm run dev   # force local Wi-Fi only
+TUNNEL=ssh npx clsh     # force SSH tunnel
+TUNNEL=local npx clsh   # force local Wi-Fi only
 ```
 
 ## Session Persistence
 
-When tmux is installed, clsh automatically wraps sessions in tmux using **control mode** (`-CC`). This means your terminal sessions survive server restarts — stop `npm run dev`, start it again, and your sessions are still there with full scrollback history.
+When tmux is installed, clsh automatically wraps sessions in tmux using **control mode** (`-CC`). This means your terminal sessions survive server restarts — stop clsh, start it again, and your sessions are still there with full scrollback history.
 
 ```
 # Install tmux (if not already installed)
@@ -178,7 +185,7 @@ No configuration needed. clsh auto-detects tmux and enables persistence. If tmux
 To disable persistence even with tmux installed:
 
 ```bash
-CLSH_NO_TMUX=1 npm run dev
+CLSH_NO_TMUX=1 npx clsh
 ```
 
 **How it works under the hood:** clsh uses tmux control mode (`-CC`) instead of normal tmux attachment. Control mode sends raw terminal output as structured notifications (`%output`) instead of screen redraws, which means xterm.js gets the original byte stream and scrollback works perfectly. User input is forwarded via `send-keys -H` (hex-encoded). On server restart, `capture-pane` recovers the existing scrollback and control mode resumes live streaming.
@@ -238,7 +245,7 @@ clsh works great out of the box. Optional features level it up:
 | **ngrok (static domain)** | yes | yes | Your Mac lives in your pocket. Same URL, PWA on home screen. |
 | **ngrok (rotating)** | yes | — | Instant remote access. QR code, scan, go. |
 | **SSH tunnel** | yes | — | Zero signup, works anywhere. Auto-fallback via localhost.run. |
-| **Local Wi-Fi** | LAN | — | Zero dependencies. `npm run dev` and you're in. |
+| **Local Wi-Fi** | LAN | — | Zero dependencies. `npx clsh` and you're in. |
 
 ## Tech Stack
 
@@ -257,7 +264,7 @@ clsh/
 ├── packages/
 │   ├── agent/     # Backend: Express + WebSocket + node-pty + auth + tunnel
 │   ├── web/       # Frontend: React + xterm.js + Tailwind + keyboard system
-│   └── cli/       # CLI wrapper (future)
+│   └── cli/       # CLI entry point (npx clsh)
 ├── apps/
 │   └── landing/   # Static landing page (clsh.dev)
 └── docs/
@@ -266,7 +273,9 @@ clsh/
 
 ## Configuration
 
-Create a `.env` file in the project root (optional):
+The easiest way to configure clsh is `npx clsh setup`, which saves settings to `~/.clsh/config.json`.
+
+You can also use environment variables:
 
 ```bash
 NGROK_AUTHTOKEN=your_token                        # For permanent URL
@@ -277,7 +286,7 @@ CLSH_NO_OPEN=1                                    # Skip auto-opening browser
 TUNNEL=ssh                                        # Force tunnel method: ssh | local
 ```
 
-See `.env.example` for all options.
+For development, create a `.env` file in the project root. See `.env.example` for all options.
 
 ## Roadmap
 
