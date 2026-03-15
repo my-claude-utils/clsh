@@ -25,6 +25,12 @@ export interface AgentConfig {
   tmuxDisabled: boolean;
 }
 
+interface ClshConfigFile {
+  ngrokAuthtoken?: string;
+  ngrokStaticDomain?: string;
+  port?: number;
+}
+
 /**
  * Loads variables from a .env file into process.env.
  * Only sets variables that are not already set (process env takes precedence).
@@ -36,33 +42,63 @@ export interface AgentConfig {
  *   # comments
  *   blank lines
  */
-function loadDotEnv(): void {
-  try {
-    // packages/agent/src/ -> packages/agent/ -> packages/ -> repo root
-    const envPath = resolve(import.meta.dirname, '..', '..', '..', '.env');
-    const content = readFileSync(envPath, 'utf-8');
+/**
+ * Parses .env content and sets unset env vars.
+ */
+function parseDotEnvContent(content: string): void {
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
 
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 0) continue;
 
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx < 0) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    if (!key) continue;
 
-      const key = trimmed.slice(0, eqIdx).trim();
-      if (!key) continue;
+    // Strip optional surrounding quotes from the value
+    const raw = trimmed.slice(eqIdx + 1).trim();
+    const value = raw.replace(/^(['"])(.*)\1$/, '$2');
 
-      // Strip optional surrounding quotes from the value
-      const raw = trimmed.slice(eqIdx + 1).trim();
-      const value = raw.replace(/^(['"])(.*)\1$/, '$2');
-
-      // Don't override values that are already set in the environment
-      if (!(key in process.env)) {
-        process.env[key] = value;
-      }
+    // Don't override values that are already set in the environment
+    if (!(key in process.env)) {
+      process.env[key] = value;
     }
+  }
+}
+
+function loadDotEnv(): void {
+  // Try multiple candidate paths for .env:
+  // 1. Monorepo root (packages/agent/src/ -> repo root)
+  // 2. Current working directory
+  const candidates = [
+    resolve(import.meta.dirname, '..', '..', '..', '.env'),
+    resolve(process.cwd(), '.env'),
+  ];
+
+  for (const envPath of candidates) {
+    try {
+      const content = readFileSync(envPath, 'utf-8');
+      parseDotEnvContent(content);
+      return; // Use the first .env we find
+    } catch {
+      // Not found at this path, try next
+    }
+  }
+  // No .env found — that's fine, env vars may be set externally or via config.json
+}
+
+/**
+ * Reads ~/.clsh/config.json if it exists.
+ * Returns parsed config or empty object.
+ */
+function loadConfigFile(): ClshConfigFile {
+  try {
+    const configPath = join(homedir(), '.clsh', 'config.json');
+    const content = readFileSync(configPath, 'utf-8');
+    return JSON.parse(content) as ClshConfigFile;
   } catch {
-    // .env not found or unreadable — that's fine, env vars may be set externally
+    return {};
   }
 }
 
@@ -93,20 +129,21 @@ function getOrCreateJwtSecret(clshDir: string): string {
 }
 
 export function loadConfig(): AgentConfig {
-  // Load .env before reading any env vars
+  // Priority: env vars > .env > ~/.clsh/config.json > defaults
   loadDotEnv();
+  const fileConfig = loadConfigFile();
 
   const clshDir = join(homedir(), '.clsh');
   const defaultDbPath = join(clshDir, 'clsh.db');
-  const port = parseInt(getEnv('PORT') ?? '4030', 10);
+  const port = parseInt(getEnv('PORT') ?? (fileConfig.port != null ? String(fileConfig.port) : '4030'), 10);
 
   return {
     port,
     webPort: parseInt(getEnv('WEB_PORT') ?? String(port), 10),
     jwtSecret: getEnv('JWT_SECRET') ?? getOrCreateJwtSecret(clshDir),
     tunnelMethod: getEnv('TUNNEL') as AgentConfig['tunnelMethod'],
-    ngrokAuthtoken: getEnv('NGROK_AUTHTOKEN'),
-    ngrokStaticDomain: getEnv('NGROK_STATIC_DOMAIN'),
+    ngrokAuthtoken: getEnv('NGROK_AUTHTOKEN') ?? fileConfig.ngrokAuthtoken,
+    ngrokStaticDomain: getEnv('NGROK_STATIC_DOMAIN') ?? fileConfig.ngrokStaticDomain,
     resendApiKey: getEnv('RESEND_API_KEY'),
     dbPath: getEnv('DB_PATH') ?? defaultDbPath,
     tmuxDisabled: getEnv('CLSH_NO_TMUX') === '1',

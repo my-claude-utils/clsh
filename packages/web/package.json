@@ -13,6 +13,10 @@
     "url": "https://github.com/my-claude-utils/clsh/issues"
   },
   "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    "./dist/*": "./dist/*"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

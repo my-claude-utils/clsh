@@ -2,8 +2,9 @@ import express, { type Express } from 'express';
 import { createServer as createNetServer } from 'node:net';
 import { createServer, type Server as HttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   generateBootstrapToken,
   verifyBootstrapToken,
@@ -17,6 +18,33 @@ export interface ServerContext {
   app: Express;
   httpServer: HttpServer;
   wss: WebSocketServer;
+}
+
+/**
+ * Finds the @clsh/web dist directory by probing multiple candidate paths.
+ * Works both in the monorepo (sibling package) and when installed via npm.
+ */
+function findWebDist(): string | null {
+  const candidates = [
+    // Monorepo: packages/agent/dist/ -> packages/web/dist/
+    join(import.meta.dirname, '..', '..', 'web', 'dist'),
+  ];
+
+  // npm install: resolve @clsh/web package and find its dist/
+  try {
+    const require = createRequire(import.meta.url);
+    const webPkg = require.resolve('@clsh/web/package.json');
+    candidates.push(join(dirname(webPkg), 'dist'));
+  } catch {
+    // @clsh/web not resolvable as a dependency — that's fine in monorepo
+  }
+
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'index.html'))) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 /**
@@ -55,8 +83,8 @@ export function createAppServer(
   app.use('/api/sse', sseRouter);
 
   // Static file serving (web dist)
-  const webDistPath = join(import.meta.dirname, '..', '..', 'web', 'dist');
-  if (existsSync(webDistPath)) {
+  const webDistPath = findWebDist();
+  if (webDistPath) {
     app.use(express.static(webDistPath));
     // SPA fallback: serve index.html for non-API routes
     app.get('*', (req, res, next) => {

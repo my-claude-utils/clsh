@@ -1,7 +1,7 @@
 {
-  "name": "@clsh/cli",
-  "version": "0.0.1",
-  "description": "clsh CLI — bootstrap and manage your clsh instance",
+  "name": "clsh",
+  "version": "0.1.0",
+  "description": "Your Mac, in your pocket. Real terminal on your phone.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -26,7 +26,8 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "@clsh/agent": "*"
+    "@clsh/agent": "*",
+    "@clsh/web": "*"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

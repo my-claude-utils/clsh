@@ -34,7 +34,7 @@ function preventSleep(): (() => void) | null {
   }
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   // 0a. Check if macOS is configured for lid-close networking
   checkNetworkPersistence();
 
@@ -118,7 +118,11 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err: unknown) => {
-  console.error('Fatal error starting clsh agent:', err);
-  process.exit(1);
-});
+// Auto-run when this file is the direct entry point (e.g. `tsx src/index.ts` or `node dist/index.js`).
+// When imported by the CLI package, CLSH_CLI=1 is set so we skip auto-run.
+if (!process.env['CLSH_CLI']) {
+  main().catch((err: unknown) => {
+    console.error('Fatal error starting clsh agent:', err);
+    process.exit(1);
+  });
+}
