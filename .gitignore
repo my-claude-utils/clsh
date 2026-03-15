@@ -44,6 +44,7 @@ coverage/
 *.mov
 *.avi
 !assets/setup-flow.mp4
+!assets/setup-flow.gif
 
 # Landing page (deployed separately to Cloudflare Pages)
 apps/landing/

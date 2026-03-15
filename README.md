@@ -18,7 +18,7 @@ A real PTY on your machine, streamed to your pocket.
 
 <br />
 
-<video src="https://github.com/my-claude-utils/clsh/raw/main/assets/setup-flow.mp4" width="600" autoplay loop muted playsinline></video>
+<img src="assets/setup-flow.gif" alt="clsh setup flow" width="300" />
 
 </div>
 
