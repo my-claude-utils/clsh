@@ -1,6 +1,7 @@
 import { useState, useRef, type FormEvent, type ClipboardEvent } from 'react';
 import type { AuthState } from '../hooks/useAuth';
 import { IOSKeyboard } from './IOSKeyboard';
+import { QRScanner } from './QRScanner';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
 interface AuthScreenProps {
@@ -11,6 +12,7 @@ interface AuthScreenProps {
 export function AuthScreen({ auth, onBootstrapSubmit }: AuthScreenProps) {
   const [bootstrapToken, setBootstrapToken] = useState('');
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const isMobile = useIsMobile();
   const mobileInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,8 +60,25 @@ export function AuthScreen({ auth, onBootstrapSubmit }: AuthScreenProps) {
     }
   };
 
+  const handleQRScan = async (token: string) => {
+    setShowScanner(false);
+    const success = await onBootstrapSubmit(token);
+    if (!success) {
+      // Token was invalid or expired
+      setBootstrapToken('');
+    }
+  };
+
   return (
     <div className="relative h-full bg-clsh-bg overflow-hidden">
+      {/* QR Scanner fullscreen overlay */}
+      {showScanner && (
+        <QRScanner
+          onScan={(token) => void handleQRScan(token)}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
       {/* Centered form area — stays in place when keyboard opens */}
       <div className="flex h-full items-center justify-center px-4">
         <div className="w-full max-w-sm">
@@ -69,9 +88,24 @@ export function AuthScreen({ auth, onBootstrapSubmit }: AuthScreenProps) {
               clsh
             </h1>
             <p className="mt-2 text-sm text-neutral-500">
-              Paste the token shown in your terminal
+              {isMobile ? 'Scan the QR code from your terminal' : 'Paste the token shown in your terminal'}
             </p>
           </div>
+
+          {/* QR Scan button (mobile primary action) */}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              disabled={auth.loading}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-md bg-clsh-orange px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+              </svg>
+              Scan QR Code
+            </button>
+          )}
 
           {/* Bootstrap token form */}
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
@@ -157,8 +191,14 @@ export function AuthScreen({ auth, onBootstrapSubmit }: AuthScreenProps) {
           )}
 
           <p className="mt-6 text-center text-xs text-neutral-600">
-            Run <code className="text-neutral-400">npx clsh-dev</code> on your Mac and scan the QR code, or copy the token from the terminal output.
+            Run <code className="text-neutral-400">npx clsh-dev</code> on your Mac{isMobile ? ' and scan the QR code' : ', then copy the token from the terminal output'}.
           </p>
+
+          {auth.error && isMobile && (
+            <p className="mt-2 text-center text-xs text-neutral-500">
+              Press Enter in your terminal to generate a new QR code.
+            </p>
+          )}
         </div>
       </div>
 

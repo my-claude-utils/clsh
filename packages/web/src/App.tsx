@@ -4,6 +4,7 @@ import { TerminalView } from './components/TerminalView';
 import SkinStudio from './components/SkinStudio';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AuthScreen } from './components/AuthScreen';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { useAuth } from './hooks/useAuth';
 import { useSessionManager } from './hooks/useSessionManager';
 import { useSkin } from './hooks/useSkin';
@@ -134,6 +135,7 @@ export function App() {
           sessionCount={sessions.length}
         />
       )}
+      <PWAInstallBanner />
     </>
   );
 }
