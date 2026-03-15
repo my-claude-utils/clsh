@@ -19,7 +19,7 @@ Go to [ngrok.com](https://ngrok.com) and sign up. The free tier includes everyth
 ### 2. Run the setup wizard
 
 ```bash
-npx clsh setup
+npx clsh-dev setup
 ```
 
 This will prompt you for:
@@ -31,7 +31,7 @@ The wizard saves these to `~/.clsh/config.json` so you only need to do this once
 ### 3. Start clsh
 
 ```bash
-npx clsh
+npx clsh-dev
 ```
 
 You should see your permanent ngrok URL in the QR code output. Scan it on your phone and save it to your home screen.
@@ -54,7 +54,7 @@ Create `~/.clsh/config.json`:
 ### Option B: Environment variables
 
 ```bash
-NGROK_AUTHTOKEN=your-authtoken-here NGROK_STATIC_DOMAIN=your-name.ngrok-free.dev npx clsh
+NGROK_AUTHTOKEN=your-authtoken-here NGROK_STATIC_DOMAIN=your-name.ngrok-free.dev npx clsh-dev
 ```
 
 ### Option C: .env file (for cloned repo)
@@ -79,7 +79,7 @@ When multiple sources are set, clsh uses this priority (highest wins):
 
 ### "ERR_NGROK_..." errors
 
-Make sure your authtoken is correct. You can re-run `npx clsh setup` to update it.
+Make sure your authtoken is correct. You can re-run `npx clsh-dev setup` to update it.
 
 ### ngrok interstitial warning page
 
@@ -90,13 +90,13 @@ Free ngrok URLs show a browser warning page on first visit. This only appears on
 Force the SSH tunnel method:
 
 ```bash
-TUNNEL=ssh npx clsh
+TUNNEL=ssh npx clsh-dev
 ```
 
 Or for local network only (no internet tunnel):
 
 ```bash
-TUNNEL=local npx clsh
+TUNNEL=local npx clsh-dev
 ```
 
 ### Where is my authtoken?

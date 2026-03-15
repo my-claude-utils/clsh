@@ -41,7 +41,7 @@ body:
       label: Steps to Reproduce
       description: Detailed steps to reproduce the issue.
       placeholder: |
-        1. Run `npx clsh`
+        1. Run `npx clsh-dev`
         2. Scan QR code or open the browser at localhost:4031
         3. Click on a session card
         4. ...

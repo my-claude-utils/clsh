@@ -58,7 +58,7 @@ clsh gives you real terminal access to your Mac from your phone. One command, sc
 > **Requires [Node.js 20+](https://nodejs.org)** and macOS or Linux.
 
 ```bash
-npx clsh
+npx clsh-dev
 ```
 
 A QR code prints to the console. Scan it on your phone. That's it.
@@ -68,7 +68,7 @@ A QR code prints to the console. Scan it on your phone. That's it.
 For a static URL that survives restarts (perfect for PWA home screen):
 
 ```bash
-npx clsh setup
+npx clsh-dev setup
 ```
 
 See the [ngrok setup guide](docs/ngrok-setup.md) for details.
@@ -93,7 +93,7 @@ See the [ngrok setup guide](docs/ngrok-setup.md) for details.
   └──────────────────────┘
 ```
 
-1. `npx clsh` starts the backend agent + React frontend
+1. `npx clsh-dev` starts the backend agent + React frontend
 2. The agent spawns real terminal sessions via `node-pty`
 3. When tmux is installed, sessions are wrapped in tmux for **persistence** — they survive server restarts
 4. A tunnel (ngrok, SSH, or Wi-Fi) exposes the agent over HTTPS
@@ -137,7 +137,7 @@ See the [ngrok setup guide](docs/ngrok-setup.md) for details.
 ### Zero-config (default)
 
 ```bash
-npx clsh
+npx clsh-dev
 ```
 
 Connects through [localhost.run](https://localhost.run) — a free SSH tunnel. **No signup, no tokens.** A QR code prints to the console with the HTTPS URL.
@@ -166,8 +166,8 @@ If no tunnel works, clsh falls back to your local IP. Same LAN only.
 ### Force a specific tunnel
 
 ```bash
-TUNNEL=ssh npx clsh     # force SSH tunnel
-TUNNEL=local npx clsh   # force local Wi-Fi only
+TUNNEL=ssh npx clsh-dev     # force SSH tunnel
+TUNNEL=local npx clsh-dev   # force local Wi-Fi only
 ```
 
 ## Session Persistence
@@ -185,7 +185,7 @@ No configuration needed. clsh auto-detects tmux and enables persistence. If tmux
 To disable persistence even with tmux installed:
 
 ```bash
-CLSH_NO_TMUX=1 npx clsh
+CLSH_NO_TMUX=1 npx clsh-dev
 ```
 
 **How it works under the hood:** clsh uses tmux control mode (`-CC`) instead of normal tmux attachment. Control mode sends raw terminal output as structured notifications (`%output`) instead of screen redraws, which means xterm.js gets the original byte stream and scrollback works perfectly. User input is forwarded via `send-keys -H` (hex-encoded). On server restart, `capture-pane` recovers the existing scrollback and control mode resumes live streaming.
@@ -245,7 +245,7 @@ clsh works great out of the box. Optional features level it up:
 | **ngrok (static domain)** | yes | yes | Your Mac lives in your pocket. Same URL, PWA on home screen. |
 | **ngrok (rotating)** | yes | — | Instant remote access. QR code, scan, go. |
 | **SSH tunnel** | yes | — | Zero signup, works anywhere. Auto-fallback via localhost.run. |
-| **Local Wi-Fi** | LAN | — | Zero dependencies. `npx clsh` and you're in. |
+| **Local Wi-Fi** | LAN | — | Zero dependencies. `npx clsh-dev` and you're in. |
 
 ## Tech Stack
 
@@ -264,7 +264,7 @@ clsh/
 ├── packages/
 │   ├── agent/     # Backend: Express + WebSocket + node-pty + auth + tunnel
 │   ├── web/       # Frontend: React + xterm.js + Tailwind + keyboard system
-│   └── cli/       # CLI entry point (npx clsh)
+│   └── cli/       # CLI entry point (npx clsh-dev)
 ├── apps/
 │   └── landing/   # Static landing page (clsh.dev)
 └── docs/
@@ -273,7 +273,7 @@ clsh/
 
 ## Configuration
 
-The easiest way to configure clsh is `npx clsh setup`, which saves settings to `~/.clsh/config.json`.
+The easiest way to configure clsh is `npx clsh-dev setup`, which saves settings to `~/.clsh/config.json`.
 
 You can also use environment variables:
 

@@ -14,9 +14,9 @@ if (args[0] === 'setup') {
   clsh — real terminal on your phone
 
   Usage:
-    npx clsh          Start the clsh server
-    npx clsh setup    Configure ngrok for a permanent URL
-    npx clsh --help   Show this help message
+    npx clsh-dev          Start the clsh server
+    npx clsh-dev setup    Configure ngrok for a permanent URL
+    npx clsh-dev --help   Show this help message
 
   Docs: https://github.com/my-claude-utils/clsh
 `);
