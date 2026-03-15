@@ -85,10 +85,11 @@ export function useAuth(): AuthReturn {
           // Ignore storage errors
         }
 
-        // Clean up the URL parameter without a page reload
+        // Clean up the URL (remove token from query or hash) without a page reload
         const url = new URL(window.location.href);
         url.searchParams.delete('token');
-        window.history.replaceState({}, '', url.toString());
+        url.hash = '';
+        window.history.replaceState({}, '', url.pathname + url.search);
 
         return true;
       } catch (err: unknown) {
@@ -114,8 +115,19 @@ export function useAuth(): AuthReturn {
     setAuth(INITIAL_STATE);
   }, []);
 
-  // Auto-authenticate from URL ?token= parameter on mount
+  // Auto-authenticate from URL #token= hash fragment on mount (H6: token in fragment, not query)
   useEffect(() => {
+    // Check hash fragment first (new format)
+    if (window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const hashToken = hashParams.get('token');
+      if (hashToken) {
+        window.history.replaceState({}, '', window.location.pathname);
+        void authenticateWithBootstrap(hashToken);
+        return;
+      }
+    }
+    // Fallback: check query param (legacy format)
     const params = new URLSearchParams(window.location.search);
     const urlToken = params.get('token');
     if (urlToken) {

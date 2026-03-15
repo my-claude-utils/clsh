@@ -11,6 +11,9 @@ import { ControlModeLineBuffer, buildSendKeysCommands } from './control-mode-par
 /** Maximum number of buffer entries retained per session for reconnection replay. */
 const MAX_BUFFER_SIZE = 10_000;
 
+/** Maximum concurrent PTY sessions (H4). */
+const MAX_SESSIONS = 8;
+
 /** Interval in ms for checking idle status across sessions. */
 const IDLE_CHECK_INTERVAL = 2_000;
 
@@ -259,6 +262,10 @@ export class PTYManager {
     rows: number = 24,
     name?: string,
   ): PTYSession {
+    if (this.sessions.size >= MAX_SESSIONS) {
+      throw new Error(`Session limit reached (max ${MAX_SESSIONS}). Close a session first.`);
+    }
+
     const id = randomUUID();
     const initialCwd = homedir();
     const wrap = this.shouldWrapInTmux(shell);
@@ -503,12 +510,16 @@ export class PTYManager {
       throw new Error(`Session not found: ${id}`);
     }
 
+    // Validate and clamp dimensions (H7)
+    const safeCols = Math.max(1, Math.min(500, Math.floor(cols)));
+    const safeRows = Math.max(1, Math.min(200, Math.floor(rows)));
+
     if (session.tmuxName) {
       // Control mode: tell tmux the new client size
-      session.pty.write(`refresh-client -C ${String(cols)},${String(rows)}\n`);
+      session.pty.write(`refresh-client -C ${String(safeCols)},${String(safeRows)}\n`);
     } else {
       // Raw PTY: resize directly
-      session.pty.resize(cols, rows);
+      session.pty.resize(safeCols, safeRows);
     }
   }
 

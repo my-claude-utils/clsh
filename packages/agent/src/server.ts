@@ -5,13 +5,13 @@ import { WebSocketServer } from 'ws';
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import rateLimit from 'express-rate-limit';
 import {
   generateBootstrapToken,
   verifyBootstrapToken,
   createSessionJWT,
   hashToken,
 } from './auth.js';
-import { createSSERouter } from './sse-handler.js';
 import type { DbStatements } from './db.js';
 import type { AgentConfig } from './config.js';
 
@@ -84,6 +84,15 @@ export function createAppServer(
 ): ServerContext {
   const app = express();
 
+  // Security headers
+  app.use((_req, res, next) => {
+    res.header('X-Frame-Options', 'DENY');
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.header('Content-Security-Policy', "default-src 'self'; connect-src 'self' wss: ws:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:");
+    next();
+  });
+
   // Middleware — dynamic CORS (restricted to allowed origins)
   app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -99,19 +108,15 @@ export function createAppServer(
     }
     next();
   });
-  app.use(express.json());
+  app.use(express.json({ limit: '16kb' }));
 
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Auth routes
+  // Auth routes (rate-limited)
   mountAuthRoutes(app, config, statements);
-
-  // SSE routes
-  const sseRouter = createSSERouter();
-  app.use('/api/sse', sseRouter);
 
   // Static file serving (web dist)
   const webDistPath = findWebDist();
@@ -139,6 +144,7 @@ export function createAppServer(
   // Clients that don't respond to a ping within 30s are terminated.
   const wss = new WebSocketServer({
     server: httpServer,
+    maxPayload: 64 * 1024, // 64 KB max message size (H3)
     verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
       const origin = info.origin;
       // Allow connections with no origin header (non-browser clients, CLIs)
@@ -169,8 +175,17 @@ function mountAuthRoutes(
   config: AgentConfig,
   statements: DbStatements,
 ): void {
+  // Rate limit auth endpoint (H2): 10 requests per 15 minutes
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many authentication attempts, please try again later' },
+  });
+
   // POST /api/auth/bootstrap — exchange a bootstrap token for a JWT
-  app.post('/api/auth/bootstrap', async (req, res) => {
+  app.post('/api/auth/bootstrap', authLimiter, async (req, res) => {
     try {
       const { token } = req.body as { token?: string };
 

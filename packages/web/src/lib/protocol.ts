@@ -3,6 +3,7 @@
  */
 
 export type ClientMessage =
+  | { type: 'auth'; token: string }
   | { type: 'stdin'; sessionId: string; data: string }
   | { type: 'resize'; sessionId: string; cols: number; rows: number }
   | { type: 'session_create'; shell: 'zsh' | 'tmux' | 'claude' }
@@ -13,6 +14,8 @@ export type ClientMessage =
   | { type: 'ping' };
 
 export type ServerMessage =
+  | { type: 'auth_ok' }
+  | { type: 'auth_error'; message: string }
   | { type: 'stdout'; sessionId: string; data: string }
   | { type: 'stderr'; sessionId: string; data: string }
   | { type: 'exit'; sessionId: string; exitCode: number; signal?: number }

@@ -40,7 +40,6 @@ export class TerminalWSClient {
   private readonly options: WSClientOptions;
 
   private get url() { return this.options.url; }
-  private get sessionId() { return this.options.sessionId; }
   private get token() { return this.options.token; }
   private get onMessage() { return this.options.onMessage; }
   private get onStatusChange() { return this.options.onStatusChange; }
@@ -55,8 +54,10 @@ export class TerminalWSClient {
 
   /**
    * Attempt to connect to the WebSocket server.
-   * Returns true if connected within 2 seconds, false otherwise
+   * Returns true if authenticated within 2 seconds, false otherwise
    * (useful for demo mode detection).
+   *
+   * H5: Token is sent as the first WS message (not in the URL query string).
    */
   connect(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -72,9 +73,8 @@ export class TerminalWSClient {
 
       this.onStatusChange('connecting');
 
+      // H5: Connect without token in URL
       const wsUrl = new URL(this.url);
-      wsUrl.searchParams.set('token', this.token);
-      wsUrl.searchParams.set('sessionId', this.sessionId);
 
       let settled = false;
 
@@ -97,20 +97,41 @@ export class TerminalWSClient {
       }
 
       this.ws.onopen = () => {
-        clearTimeout(timeout);
-        if (!settled) {
-          settled = true;
-          resolve(true);
-        }
-        this.reconnectAttempts = 0;
-        this.onStatusChange('connected');
-        this.startPing();
-        this.addLifecycleListeners();
+        // Send auth as first message (H5)
+        this.ws?.send(JSON.stringify({ type: 'auth', token: this.token }));
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
         try {
           const msg = JSON.parse(String(event.data)) as ServerMessage;
+
+          // Handle auth response
+          if (msg.type === 'auth_ok') {
+            clearTimeout(timeout);
+            if (!settled) {
+              settled = true;
+              resolve(true);
+            }
+            this.reconnectAttempts = 0;
+            this.onStatusChange('connected');
+            this.startPing();
+            this.addLifecycleListeners();
+            return;
+          }
+
+          if (msg.type === 'auth_error') {
+            clearTimeout(timeout);
+            if (!settled) {
+              settled = true;
+              resolve(false);
+            }
+            // Auth failed, treat like 4001
+            this.disposed = true;
+            this.removeLifecycleListeners();
+            this.options.onUnauthorized?.();
+            return;
+          }
+
           this.onMessage(msg);
         } catch {
           // Ignore malformed messages

@@ -173,7 +173,7 @@ export function printAccessInfo(
   bootstrapToken: string,
   method: TunnelMethod,
 ): void {
-  const authUrl = `${publicUrl}/?token=${bootstrapToken}`;
+  const authUrl = `${publicUrl}/#token=${bootstrapToken}`;
 
   // ANSI orange (256-color: 208)
   const o = '\x1b[38;5;208m';

@@ -1,6 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
-import { URL } from 'node:url';
 import { verifyJWT } from './auth.js';
 import { PTYManager, type PTYSession } from './pty-manager.js';
 import type { ClientMessage, ServerMessage, ShellType } from './types.js';
@@ -8,6 +7,9 @@ import type { ClientMessage, ServerMessage, ShellType } from './types.js';
 /** WebSocket close codes. */
 const WS_CLOSE_UNAUTHORIZED = 4001;
 const WS_CLOSE_NORMAL = 1000;
+
+/** Timeout for initial auth message (5 seconds). */
+const AUTH_TIMEOUT_MS = 5_000;
 
 /** Subscriptions map: which sessions each WebSocket client is subscribed to. */
 type SubscriptionMap = Map<WebSocket, Set<string>>;
@@ -57,28 +59,69 @@ export function setupWebSocketHandler(
 
 async function handleConnection(
   ws: WebSocket,
-  req: IncomingMessage,
+  _req: IncomingMessage,
   ptyManager: PTYManager,
   jwtSecret: string,
   subscriptions: SubscriptionMap,
 ): Promise<void> {
-  // Extract JWT from query parameter
-  const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-  const token = url.searchParams.get('token');
+  // H5: Auth via first WS message instead of query param.
+  // Wait for { type: 'auth', token: '...' } as the first message.
+  const authTimeout = setTimeout(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      send(ws, { type: 'auth_error', message: 'Authentication timeout' });
+      ws.close(WS_CLOSE_UNAUTHORIZED, 'Authentication timeout');
+    }
+  }, AUTH_TIMEOUT_MS);
 
-  if (!token) {
-    ws.close(WS_CLOSE_UNAUTHORIZED, 'Missing authentication token');
-    return;
-  }
+  ws.once('message', (rawData: Buffer | string) => {
+    clearTimeout(authTimeout);
+    void (async () => {
+      const data = typeof rawData === 'string' ? rawData : rawData.toString('utf-8');
+      let parsed: { type?: string; token?: string };
+      try {
+        parsed = JSON.parse(data) as { type?: string; token?: string };
+      } catch {
+        send(ws, { type: 'auth_error', message: 'Invalid message format' });
+        ws.close(WS_CLOSE_UNAUTHORIZED, 'Invalid auth message');
+        return;
+      }
 
-  try {
-    await verifyJWT(token, jwtSecret);
-  } catch {
-    ws.close(WS_CLOSE_UNAUTHORIZED, 'Invalid or expired token');
-    return;
-  }
+      if (parsed.type !== 'auth' || !parsed.token) {
+        send(ws, { type: 'auth_error', message: 'First message must be auth' });
+        ws.close(WS_CLOSE_UNAUTHORIZED, 'Missing auth message');
+        return;
+      }
 
-  // Authentication succeeded -- set up message handling
+      try {
+        await verifyJWT(parsed.token, jwtSecret);
+      } catch {
+        send(ws, { type: 'auth_error', message: 'Invalid or expired token' });
+        ws.close(WS_CLOSE_UNAUTHORIZED, 'Invalid or expired token');
+        return;
+      }
+
+      // Authentication succeeded
+      send(ws, { type: 'auth_ok' });
+      setupAuthenticatedHandlers(ws, ptyManager, subscriptions);
+    })();
+  });
+
+  ws.on('close', () => {
+    clearTimeout(authTimeout);
+    subscriptions.delete(ws);
+  });
+
+  ws.on('error', () => {
+    clearTimeout(authTimeout);
+    subscriptions.delete(ws);
+  });
+}
+
+function setupAuthenticatedHandlers(
+  ws: WebSocket,
+  ptyManager: PTYManager,
+  subscriptions: SubscriptionMap,
+): void {
   (ws as unknown as { isAlive: boolean }).isAlive = true;
   ws.on('pong', () => { (ws as unknown as { isAlive: boolean }).isAlive = true; });
   subscriptions.set(ws, new Set());
@@ -93,15 +136,6 @@ async function handleConnection(
     }
 
     handleMessage(ws, message, ptyManager, subscriptions);
-  });
-
-  ws.on('close', () => {
-    // Clear subscriptions but do NOT destroy sessions (allow reconnection)
-    subscriptions.delete(ws);
-  });
-
-  ws.on('error', () => {
-    subscriptions.delete(ws);
   });
 }
 
