@@ -1,6 +1,6 @@
 {
   "name": "clsh-dev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Your Mac, in your pocket. Real terminal on your phone.",
   "license": "MIT",
   "repository": {
@@ -15,7 +15,7 @@
   "type": "module",
   "files": ["dist"],
   "bin": {
-    "clsh": "dist/index.js"
+    "clsh-dev": "dist/index.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
