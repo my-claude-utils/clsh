@@ -3,6 +3,9 @@
 
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { chmodSync, statSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import { loadConfig } from './config.js';
 import { initDatabase } from './db.js';
 import { generateBootstrapToken, hashToken } from './auth.js';
@@ -34,7 +37,31 @@ function preventSleep(): (() => void) | null {
   }
 }
 
+/**
+ * npm may strip execute permission from node-pty's spawn-helper binary
+ * when installed via npx. This causes posix_spawnp to fail on all PTY
+ * spawns. Fix permissions at startup if needed.
+ */
+function fixNodePtyPermissions(): void {
+  try {
+    const require = createRequire(import.meta.url);
+    const ptyPkg = require.resolve('node-pty/package.json');
+    const ptyDir = dirname(ptyPkg);
+    const arch = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+    const helper = join(ptyDir, 'prebuilds', arch, 'spawn-helper');
+    const st = statSync(helper);
+    if (!(st.mode & 0o111)) {
+      chmodSync(helper, st.mode | 0o755);
+    }
+  } catch {
+    // Not critical if we can't find/fix the helper (e.g. non-darwin, different node-pty version)
+  }
+}
+
 export async function main(): Promise<void> {
+  // 0. Fix node-pty spawn-helper permissions (npm/npx can strip +x)
+  fixNodePtyPermissions();
+
   // 0a. Check if macOS is configured for lid-close networking
   checkNetworkPersistence();
 
