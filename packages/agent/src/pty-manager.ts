@@ -104,6 +104,8 @@ export class PTYManager {
   private sessions = new Map<string, PTYSession>();
   private idleCheckInterval: ReturnType<typeof setInterval> | null = null;
   private updateListeners = new Map<string, Array<(meta: SessionMeta) => void>>();
+  /** When true, PTY exit handlers skip tmux/DB cleanup to preserve session persistence. */
+  private shuttingDown = false;
 
   private tmuxEnabled: boolean;
   private tmuxConfPath: string | null;
@@ -199,7 +201,7 @@ export class PTYManager {
       for (const listener of exitListeners) {
         listener(event);
       }
-      if (session.tmuxName) {
+      if (session.tmuxName && !this.shuttingDown) {
         killTmuxSession(session.tmuxName);
         if (this.db) {
           try { this.db.deletePtySession.run(session.id); } catch { /* ignore */ }
@@ -234,7 +236,7 @@ export class PTYManager {
       for (const listener of exitListeners) {
         listener(event);
       }
-      if (session.tmuxName) {
+      if (session.tmuxName && !this.shuttingDown) {
         killTmuxSession(session.tmuxName);
         if (this.db) {
           try { this.db.deletePtySession.run(session.id); } catch { /* ignore */ }
@@ -543,6 +545,7 @@ export class PTYManager {
    * tmux sessions and DB rows survive for rediscovery on next startup.
    */
   destroyAll(): void {
+    this.shuttingDown = true;
     for (const session of this.sessions.values()) {
       session.pty.kill();
     }
