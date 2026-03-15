@@ -16,6 +16,10 @@ A real PTY on your machine, streamed to your pocket.
 
 [Live Demo](https://clsh.dev) · [Getting Started](#quickstart) · [How It Works](#how-it-works) · [Contributing](CONTRIBUTING.md)
 
+<br />
+
+<video src="https://github.com/my-claude-utils/clsh/raw/main/assets/setup-flow.mp4" width="600" autoplay loop muted playsinline></video>
+
 </div>
 
 ---
