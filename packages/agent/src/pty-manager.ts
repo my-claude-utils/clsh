@@ -1,5 +1,6 @@
 import { spawn, type IPty } from 'node-pty';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename } from 'node:path';
 import type { ShellType } from './types.js';
@@ -361,13 +362,26 @@ export class PTYManager {
       ? ['-CC', '-L', TMUX_SOCKET, '-f', this.tmuxConfPath, 'attach-session', '-t', tmuxName]
       : ['-CC', '-L', TMUX_SOCKET, 'attach-session', '-t', tmuxName];
 
-    const pty = spawn('tmux', args, {
-      name: 'xterm-256color',
-      cols,
-      rows,
-      cwd: savedCwd || homedir(),
-      env: buildSafeEnv(),
-    });
+    // Use homedir() as fallback if savedCwd doesn't exist
+    const cwd = savedCwd && existsSync(savedCwd) ? savedCwd : homedir();
+
+    let pty: ReturnType<typeof spawn>;
+    try {
+      pty = spawn('tmux', args, {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        cwd,
+        env: buildSafeEnv(),
+      });
+    } catch {
+      // PTY spawn failed (e.g. posix_spawnp error) — clean up and skip
+      if (this.db) {
+        try { this.db.deletePtySession.run(sessionId); } catch { /* ignore */ }
+      }
+      killTmuxSession(tmuxName);
+      return null;
+    }
 
     const buffer: string[] = [];
     const dataListeners: Array<(data: string) => void> = [];

@@ -1,6 +1,6 @@
 {
   "name": "@clsh/agent",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "clsh local agent — PTY manager, WebSocket server, auth, and ngrok tunnel",
   "license": "MIT",
   "repository": {
