@@ -89,7 +89,7 @@ export async function runSetup(): Promise<void> {
   }
 
   console.log(`
-  Done! Run \`npx clsh\` to start with your permanent ngrok URL.
+  Done! Run \`npx clsh-dev\` to start with your permanent ngrok URL.
   Guide: https://github.com/my-claude-utils/clsh/blob/main/docs/ngrok-setup.md
 `);
 
