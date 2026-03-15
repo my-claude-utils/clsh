@@ -52,7 +52,7 @@ export async function runSetup(): Promise<void> {
   const wantNgrok = await prompt(rl, '  Do you want to set up ngrok? (y/N) ');
 
   if (wantNgrok.toLowerCase() !== 'y' && wantNgrok.toLowerCase() !== 'yes') {
-    console.log('\n  Skipped. Run `npx clsh` to start with the default SSH tunnel.\n');
+    console.log('\n  Skipped. Run `npx clsh-dev` to start with the default SSH tunnel.\n');
     rl.close();
     return;
   }
@@ -65,7 +65,7 @@ export async function runSetup(): Promise<void> {
   const authtoken = await prompt(rl, '  Paste your ngrok authtoken: ');
 
   if (!authtoken) {
-    console.log('\n  No authtoken provided. Run `npx clsh setup` again when ready.\n');
+    console.log('\n  No authtoken provided. Run `npx clsh-dev setup` again when ready.\n');
     rl.close();
     return;
   }
