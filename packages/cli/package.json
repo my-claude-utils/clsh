@@ -1,5 +1,5 @@
 {
-  "name": "clsh",
+  "name": "clsh-dev",
   "version": "0.1.0",
   "description": "Your Mac, in your pocket. Real terminal on your phone.",
   "license": "MIT",
@@ -13,6 +13,7 @@
     "url": "https://github.com/my-claude-utils/clsh/issues"
   },
   "type": "module",
+  "files": ["dist"],
   "bin": {
     "clsh": "dist/index.js"
   },
@@ -26,8 +27,8 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "@clsh/agent": "*",
-    "@clsh/web": "*"
+    "@clsh/agent": "0.0.1",
+    "@clsh/web": "0.0.1"
   },
   "devDependencies": {
     "tsx": "^4.19.0"
