@@ -204,6 +204,8 @@ export function printAccessInfo(
       console.log(`${dim}     Set NGROK_AUTHTOKEN in .env for remote access.${r}`);
     }
     console.log('');
+    console.log(`${dim}  GitHub: https://github.com/my-claude-utils/clsh${r}`);
+    console.log('');
   });
 }
 
