@@ -1,0 +1,15 @@
+#!/bin/sh
+# Pre-commit hook: reject staged .env files to prevent credential leaks
+
+STAGED_ENV=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^\.env|/\.env' || true)
+
+if [ -n "$STAGED_ENV" ]; then
+  echo ""
+  echo "ERROR: Attempting to commit .env file(s):"
+  echo "$STAGED_ENV"
+  echo ""
+  echo "These files may contain secrets (API keys, tokens)."
+  echo "If you really need to commit them, use: git commit --no-verify"
+  echo ""
+  exit 1
+fi

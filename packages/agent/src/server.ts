@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
 import { createServer as createNetServer } from 'node:net';
-import { createServer, type Server as HttpServer } from 'node:http';
+import { createServer, type Server as HttpServer, type IncomingMessage } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -9,6 +9,7 @@ import {
   generateBootstrapToken,
   verifyBootstrapToken,
   createSessionJWT,
+  hashToken,
 } from './auth.js';
 import { createSSERouter } from './sse-handler.js';
 import type { DbStatements } from './db.js';
@@ -18,6 +19,32 @@ export interface ServerContext {
   app: Express;
   httpServer: HttpServer;
   wss: WebSocketServer;
+}
+
+/**
+ * Set of allowed origins for CORS and WebSocket origin checks.
+ * Populated at startup and updated when tunnel URLs change.
+ */
+const allowedOrigins = new Set<string>();
+
+/**
+ * Updates the set of allowed origins based on the current server port and tunnel URL.
+ * Called at startup and whenever the tunnel is recreated.
+ */
+export function updateAllowedOrigins(port: number, tunnelUrl?: string): void {
+  allowedOrigins.clear();
+  // Local dev origins
+  allowedOrigins.add(`http://localhost:${port}`);
+  allowedOrigins.add(`http://127.0.0.1:${port}`);
+  // Vite dev server (default 4031)
+  allowedOrigins.add('http://localhost:4031');
+  allowedOrigins.add('http://127.0.0.1:4031');
+  if (tunnelUrl) {
+    try {
+      const url = new URL(tunnelUrl);
+      allowedOrigins.add(url.origin);
+    } catch { /* invalid URL — skip */ }
+  }
 }
 
 /**
@@ -57,12 +84,16 @@ export function createAppServer(
 ): ServerContext {
   const app = express();
 
-  // Middleware — CORS for development
-  app.use((_req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+  // Middleware — dynamic CORS (restricted to allowed origins)
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.has(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    }
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (_req.method === 'OPTIONS') {
+    if (req.method === 'OPTIONS') {
       res.sendStatus(204);
       return;
     }
@@ -106,7 +137,15 @@ export function createAppServer(
 
   // Create WebSocket server with native ping to detect dead connections.
   // Clients that don't respond to a ping within 30s are terminated.
-  const wss = new WebSocketServer({ server: httpServer });
+  const wss = new WebSocketServer({
+    server: httpServer,
+    verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
+      const origin = info.origin;
+      // Allow connections with no origin header (non-browser clients, CLIs)
+      if (!origin) return true;
+      return allowedOrigins.has(origin);
+    },
+  });
 
   const WS_PING_INTERVAL = 30_000;
   const pingInterval = setInterval(() => {
@@ -145,6 +184,9 @@ function mountAuthRoutes(
         res.status(401).json({ error: 'Invalid or expired bootstrap token' });
         return;
       }
+
+      // Consume the token immediately — one-time use only
+      statements.deleteBootstrapToken.run(hashToken(token));
 
       const jwt = await createSessionJWT(
         { authMethod: 'bootstrap' },

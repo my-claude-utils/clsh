@@ -9,10 +9,10 @@ import { createRequire } from 'node:module';
 import { loadConfig } from './config.js';
 import { initDatabase } from './db.js';
 import { generateBootstrapToken, hashToken } from './auth.js';
-import { createAppServer, startServer } from './server.js';
+import { createAppServer, startServer, updateAllowedOrigins } from './server.js';
 import { setupWebSocketHandler } from './ws-handler.js';
 import { PTYManager } from './pty-manager.js';
-import { createTunnel, printAccessInfo, startTunnelMonitor, registerShutdownHandlers } from './tunnel.js';
+import { createTunnel, printAccessInfo, startTunnelMonitor, registerShutdownHandlers, getTunnelUrl } from './tunnel.js';
 import { isTmuxAvailable, ensureTmuxConfig } from './tmux.js';
 import { checkNetworkPersistence } from './power.js';
 
@@ -75,9 +75,9 @@ export async function main(): Promise<void> {
   const { db, statements } = initDatabase(config.dbPath);
 
   // 3. Generate bootstrap token and store its hash
-  const bootstrapToken = generateBootstrapToken();
+  let currentBootstrapToken = generateBootstrapToken();
   const tokenId = randomUUID();
-  const tokenHash = hashToken(bootstrapToken);
+  const tokenHash = hashToken(currentBootstrapToken);
   statements.insertBootstrapToken.run(tokenId, tokenHash);
 
   // 4. tmux session persistence (control mode -CC for scrollback support)
@@ -126,17 +126,54 @@ export async function main(): Promise<void> {
   const tunnelPort = config.webPort !== config.port ? config.webPort : actualPort;
   const tunnel = await createTunnel(tunnelPort, config.ngrokAuthtoken, config.ngrokStaticDomain, config.tunnelMethod);
 
-  // 10. Print clean startup info
-  printAccessInfo(tunnel.url, bootstrapToken, tunnel.method);
+  // 10. Set allowed origins for CORS and WebSocket origin checks
+  updateAllowedOrigins(actualPort, tunnel.url);
 
-  // 11. Monitor tunnel health — auto-recovers after sleep/wake or SSH death
+  // 11. Print clean startup info
+  printAccessInfo(tunnel.url, currentBootstrapToken, tunnel.method);
+
+  // 12. Monitor tunnel health — auto-recovers after sleep/wake or SSH death
   const stopTunnelMonitor = startTunnelMonitor((newUrl, method) => {
-    // Tunnel was recreated with a (possibly new) URL — reprint access info
-    printAccessInfo(newUrl, bootstrapToken, method);
+    // Tunnel was recreated with a (possibly new) URL — reprint access info and update origins
+    updateAllowedOrigins(actualPort, newUrl);
+    printAccessInfo(newUrl, currentBootstrapToken, method);
   });
 
-  // 12. Register graceful shutdown handlers
+  // 13. Listen for Enter key to regenerate QR code with new one-time token
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on('data', (key: Buffer) => {
+      const ch = key[0];
+      // Ctrl+C
+      if (ch === 3) {
+        process.kill(process.pid, 'SIGINT');
+        return;
+      }
+      // Enter key
+      if (ch === 13) {
+        currentBootstrapToken = generateBootstrapToken();
+        const newTokenId = randomUUID();
+        const newTokenHash = hashToken(currentBootstrapToken);
+        statements.insertBootstrapToken.run(newTokenId, newTokenHash);
+        const tunnelUrl = getTunnelUrl();
+        if (tunnelUrl) {
+          printAccessInfo(tunnelUrl, currentBootstrapToken, tunnel.method);
+        }
+      }
+    });
+    const dim = '\x1b[2m';
+    const r = '\x1b[0m';
+    console.log(`${dim}  Press Enter to generate a new QR code${r}`);
+    console.log('');
+  }
+
+  // 14. Register graceful shutdown handlers
   registerShutdownHandlers(() => {
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    }
     stopCaffeinate?.();
     stopTunnelMonitor();
     ptyManager.destroyAll(); // Kills control clients but leaves tmux sessions alive

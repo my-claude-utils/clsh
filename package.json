@@ -37,7 +37,8 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "postinstall": "node scripts/fix-node-pty.js"
+    "postinstall": "node scripts/fix-node-pty.js",
+    "prepare": "cp scripts/pre-commit .git/hooks/pre-commit 2>/dev/null || true"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
