@@ -5,16 +5,21 @@ import SkinStudio from './components/SkinStudio';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AuthScreen } from './components/AuthScreen';
 import { SplashScreen } from './components/SplashScreen';
+import { LockSetup } from './components/LockSetup';
+import { LockScreen } from './components/LockScreen';
 
 import { useAuth } from './hooks/useAuth';
 import { useSessionManager } from './hooks/useSessionManager';
 import { useSkin } from './hooks/useSkin';
+import { useLockScreen } from './hooks/useLockScreen';
+import { getBiometricIds, getClientPwdHash } from './lib/lock-screen';
 import type { View } from './lib/types';
 
 export function App() {
-  const { auth, authenticateWithBootstrap, handleUnauthorized } = useAuth();
+  const { auth, authenticateWithBootstrap, authenticateWithPassword, authenticateWithBiometric, handleUnauthorized } = useAuth();
   const { sessions, wsClient, messageBus, createSession, closeSession, getSessionOutput, setSessionSnapshot, renameSession, status: wsStatus } = useSessionManager(auth, handleUnauthorized);
   const { skin, setSkin, perKeyColors, setPerKeyColors } = useSkin();
+  const { isLocked, needsSetup, biometricAvailable, hasBiometric, unlock, completeLockSetup } = useLockScreen(auth.isAuthenticated);
 
   const [view, setView] = useState<View>('grid');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -31,6 +36,34 @@ export function App() {
 
   // Splash is ready to dismiss when min reveal time passed AND auth is not in-flight
   const splashReady = minTimeElapsed && !auth.loading;
+
+  // Auto-sync local lock state to server (covers pre-existing setups before server-side storage)
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (!auth.isAuthenticated || !auth.token || syncedRef.current) return;
+    syncedRef.current = true;
+
+    const ids = getBiometricIds();
+    const clientHash = getClientPwdHash();
+
+    // Sync biometric credential to server if local has it
+    if (ids) {
+      void fetch('/api/auth/lock/biometric', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.token}` },
+        body: JSON.stringify(ids),
+      }).catch(() => {});
+    }
+
+    // Sync client password hash to server if local has it
+    if (clientHash) {
+      void fetch('/api/auth/lock/client-hash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${auth.token}` },
+        body: JSON.stringify({ clientHash }),
+      }).catch(() => {});
+    }
+  }, [auth.isAuthenticated, auth.token]);
 
   // Reactive session creation: navigate to a new session when it arrives
   const awaitingNewSession = useRef(false);
@@ -93,9 +126,15 @@ export function App() {
       <AuthScreen
         auth={auth}
         onBootstrapSubmit={authenticateWithBootstrap}
+        onPasswordSubmit={authenticateWithPassword}
+        onBiometricSubmit={authenticateWithBiometric}
       />
     ) : (
       <div className="h-full bg-[#060606]" />
+    );
+  } else if (needsSetup) {
+    content = (
+      <LockSetup biometricAvailable={biometricAvailable} onComplete={completeLockSetup} jwt={auth.token} />
     );
   } else if (view === 'terminal' && activeSession) {
     content = (
@@ -157,6 +196,9 @@ export function App() {
   return (
     <>
       {content}
+      {isLocked && auth.isAuthenticated && !needsSetup && (
+        <LockScreen hasBiometric={hasBiometric} onUnlock={unlock} />
+      )}
       {!splashDone && (
         <SplashScreen ready={splashReady} onComplete={() => setSplashDone(true)} />
       )}

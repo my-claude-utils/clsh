@@ -1,6 +1,6 @@
 {
   "name": "clsh-dev",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Your Mac, in your pocket. Real terminal on your phone.",
   "license": "MIT",
   "repository": {
@@ -29,8 +29,8 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "@clsh/agent": "0.0.6",
-    "@clsh/web": "0.0.3"
+    "@clsh/agent": "0.0.7",
+    "@clsh/web": "0.0.4"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

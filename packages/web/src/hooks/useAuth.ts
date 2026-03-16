@@ -10,6 +10,8 @@ export interface AuthState {
 interface AuthReturn {
   auth: AuthState;
   authenticateWithBootstrap: (token: string) => Promise<boolean>;
+  authenticateWithPassword: (password: string) => Promise<boolean>;
+  authenticateWithBiometric: (credentialId: string) => Promise<boolean>;
   logout: () => void;
   /** Called when the WS closes with code 4001 (token expired/backend restarted) */
   handleUnauthorized: () => void;
@@ -112,6 +114,109 @@ export function useAuth(): AuthReturn {
     [],
   );
 
+  const authenticateWithPassword = useCallback(
+    async (password: string): Promise<boolean> => {
+      setAuth((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const response = await fetch('/api/auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+
+        if (!response.ok) {
+          const body = (await response.json()) as { error?: string };
+          const message = body.error ?? `Authentication failed (${String(response.status)})`;
+          setAuth((prev) => ({
+            ...prev,
+            loading: false,
+            error: message,
+          }));
+          return false;
+        }
+
+        const data = (await response.json()) as { token: string };
+
+        setAuth({
+          isAuthenticated: true,
+          token: data.token,
+          loading: false,
+          error: null,
+        });
+
+        try {
+          STORAGE.setItem(SESSION_KEY, data.token);
+        } catch {
+          // Ignore storage errors
+        }
+
+        return true;
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Network error';
+        setAuth((prev) => ({
+          ...prev,
+          loading: false,
+          error: message,
+        }));
+        return false;
+      }
+    },
+    [],
+  );
+
+  const authenticateWithBiometric = useCallback(
+    async (credentialId: string): Promise<boolean> => {
+      setAuth((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const response = await fetch('/api/auth/biometric', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credentialId }),
+        });
+
+        if (!response.ok) {
+          const body = (await response.json()) as { error?: string };
+          setAuth((prev) => ({
+            ...prev,
+            loading: false,
+            error: body.error ?? 'Authentication failed',
+          }));
+          return false;
+        }
+
+        const data = (await response.json()) as { token: string };
+
+        setAuth({
+          isAuthenticated: true,
+          token: data.token,
+          loading: false,
+          error: null,
+        });
+
+        try {
+          STORAGE.setItem(SESSION_KEY, data.token);
+        } catch {
+          // Ignore storage errors
+        }
+
+        return true;
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Network error';
+        setAuth((prev) => ({
+          ...prev,
+          loading: false,
+          error: message,
+        }));
+        return false;
+      }
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     try {
       STORAGE.removeItem(SESSION_KEY);
@@ -149,5 +254,5 @@ export function useAuth(): AuthReturn {
     setAuth(INITIAL_STATE);
   }, []);
 
-  return { auth, authenticateWithBootstrap, logout, handleUnauthorized };
+  return { auth, authenticateWithBootstrap, authenticateWithPassword, authenticateWithBiometric, logout, handleUnauthorized };
 }

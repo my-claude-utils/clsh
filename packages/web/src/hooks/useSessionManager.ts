@@ -111,6 +111,9 @@ export function useSessionManager(
         setStatus(s);
         if (s === 'connected') {
           client.send({ type: 'session_list' });
+        } else {
+          // Clear stale sessions while disconnected; session_list repopulates on reconnect
+          setSessions([]);
         }
       },
       onUnauthorized,

@@ -100,6 +100,28 @@ See the [ngrok setup guide](docs/ngrok-setup.md) for details.
 5. A one-time bootstrap token + QR code authenticates your phone
 6. xterm.js renders the terminals in your browser with full color and interactivity
 
+## Security
+
+**Security is our top priority.** clsh gives remote terminal access to your machine, so any vulnerability could mean full machine compromise. We take this extremely seriously.
+
+### What we do
+
+| Layer | Protection |
+|-------|-----------|
+| **Authentication** | One-time bootstrap tokens (single-use, 5-min TTL), scrypt password hashing (N=16384, 64-byte key, random salt), WebAuthn/Face ID biometric auth |
+| **Token security** | JWT issued via HS256, bootstrap token passed in URL hash fragment (never sent to servers), WebSocket auth via first message (not query string) |
+| **Transport** | HTTPS enforced via ngrok/SSH tunnels, CORS restricted to known origins, security headers (X-Frame-Options, X-Content-Type-Options, CSP) |
+| **Rate limiting** | Auth endpoints: 5-10 requests per 15 minutes, prevents brute force |
+| **WebSocket** | Origin validation on upgrade, 64KB max payload, resize dimension bounds checking |
+| **Password storage** | Server-side scrypt with `crypto.timingSafeEqual` (constant-time comparison prevents timing attacks) |
+| **PWA support** | Lock screen with Face ID + password, biometric credentials synced server-side for cross-context restoration |
+
+### Responsible disclosure
+
+Found a vulnerability? **Please report it.** See [SECURITY.md](SECURITY.md) for our disclosure policy, or email **security@clsh.dev** directly. We respond within 48 hours.
+
+We believe in transparency. If you find something, [open a security advisory](https://github.com/my-claude-utils/clsh/security/advisories/new) or email us. We will credit all responsible disclosures.
+
 ## Features
 
 ### Terminal
@@ -254,7 +276,7 @@ clsh works great out of the box. Optional features level it up:
 | Frontend | React 18, TypeScript, Vite 6, Tailwind CSS v4, xterm.js (WebGL) |
 | Backend | Node.js 20+, Express, ws, node-pty, tmux (control mode), better-sqlite3 |
 | Tunnel | @ngrok/ngrok SDK, localhost.run (SSH fallback) |
-| Auth | jose (JWT), one-time bootstrap tokens |
+| Auth | jose (JWT), scrypt passwords, WebAuthn (Face ID/Touch ID), one-time bootstrap tokens |
 | Monorepo | Turborepo, npm workspaces |
 
 ## Project Structure
@@ -295,6 +317,9 @@ For development, create a `.env` file in the project root. See `.env.example` fo
 - [x] 6 keyboard skins with Skin Studio
 - [x] 3-tier tunnel (ngrok → SSH → Wi-Fi)
 - [x] QR code + JWT auth
+- [x] Server-side password + Face ID authentication (PWA-friendly)
+- [x] Lock screen with biometric + password unlock
+- [x] Rate limiting, CORS, security headers, WebSocket hardening
 - [x] PWA with fullscreen standalone mode
 - [x] Demo mode for showcasing
 - [x] Session persistence (tmux control mode — sessions survive restarts)
