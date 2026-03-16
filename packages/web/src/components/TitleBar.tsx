@@ -146,7 +146,7 @@ export function TitleBar({
                 color: '#555',
                 cursor: 'pointer',
                 padding: 0,
-                fontSize: 11,
+                fontSize: 18,
                 lineHeight: 1,
                 flexShrink: 0,
               }}

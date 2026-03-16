@@ -30,7 +30,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --filter=@clsh/agent --filter=@clsh/web --parallel --log-prefix=none --log-order=stream --verbosity=0",
+    "dev": "trap 'kill 0' EXIT; : ${PORT:=4030}; AGENT_PORT=$PORT npm run dev --workspace=@clsh/web -- --port $((PORT+1)) &>/dev/null & WEB_PORT=$((PORT+1)) npm run dev --workspace=@clsh/agent",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

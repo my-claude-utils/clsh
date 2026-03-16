@@ -139,29 +139,32 @@ export async function main(): Promise<void> {
     printAccessInfo(newUrl, currentBootstrapToken, method);
   });
 
-  // 13. Listen for Enter key to regenerate QR code with new one-time token
-  if (process.stdin.isTTY) {
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.on('data', (key: Buffer) => {
-      const ch = key[0];
-      // Ctrl+C
-      if (ch === 3) {
-        process.kill(process.pid, 'SIGINT');
-        return;
+  // 13. Listen for Enter key to regenerate QR code with new one-time token.
+  //     Works in both TTY mode (npx clsh-dev) and piped mode (turbo / npm run dev).
+  try {
+    if (process.stdin.setRawMode) process.stdin.setRawMode(true);
+  } catch { /* not a TTY — line-buffered input still works */ }
+  process.stdin.resume();
+  process.stdin.on('data', (key: Buffer) => {
+    const ch = key[0];
+    // Ctrl+C (raw mode only)
+    if (ch === 3) {
+      process.kill(process.pid, 'SIGINT');
+      return;
+    }
+    // Enter key: \r in raw mode, \n in line-buffered/piped mode
+    if (ch === 13 || ch === 10) {
+      currentBootstrapToken = generateBootstrapToken();
+      const newTokenId = randomUUID();
+      const newTokenHash = hashToken(currentBootstrapToken);
+      statements.insertBootstrapToken.run(newTokenId, newTokenHash);
+      const tunnelUrl = getTunnelUrl();
+      if (tunnelUrl) {
+        printAccessInfo(tunnelUrl, currentBootstrapToken, tunnel.method);
       }
-      // Enter key
-      if (ch === 13) {
-        currentBootstrapToken = generateBootstrapToken();
-        const newTokenId = randomUUID();
-        const newTokenHash = hashToken(currentBootstrapToken);
-        statements.insertBootstrapToken.run(newTokenId, newTokenHash);
-        const tunnelUrl = getTunnelUrl();
-        if (tunnelUrl) {
-          printAccessInfo(tunnelUrl, currentBootstrapToken, tunnel.method);
-        }
-      }
-    });
+    }
+  });
+  {
     const dim = '\x1b[2m';
     const r = '\x1b[0m';
     console.log(`${dim}  Press Enter to generate a new QR code${r}`);
@@ -170,10 +173,10 @@ export async function main(): Promise<void> {
 
   // 14. Register graceful shutdown handlers
   registerShutdownHandlers(() => {
-    if (process.stdin.isTTY) {
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-    }
+    try {
+      if (process.stdin.setRawMode) process.stdin.setRawMode(false);
+    } catch { /* ignore */ }
+    process.stdin.pause();
     stopCaffeinate?.();
     stopTunnelMonitor();
     ptyManager.destroyAll(); // Kills control clients but leaves tmux sessions alive

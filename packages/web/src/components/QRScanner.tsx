@@ -30,9 +30,16 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
 
     const start = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-        });
+        // Use `ideal` constraint with fallback — iOS Safari rejects exact
+        // facingMode strings with "The string did not match the expected pattern"
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
         if (cancelled) {
           for (const track of stream.getTracks()) track.stop();
           return;

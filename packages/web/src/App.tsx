@@ -4,7 +4,8 @@ import { TerminalView } from './components/TerminalView';
 import SkinStudio from './components/SkinStudio';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AuthScreen } from './components/AuthScreen';
-import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { SplashScreen } from './components/SplashScreen';
+
 import { useAuth } from './hooks/useAuth';
 import { useSessionManager } from './hooks/useSessionManager';
 import { useSkin } from './hooks/useSkin';
@@ -18,6 +19,18 @@ export function App() {
   const [view, setView] = useState<View>('grid');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Splash screen state — rendered as overlay so hooks always run
+  const [splashDone, setSplashDone] = useState(false);
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimeElapsed(true), 1800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Splash is ready to dismiss when min reveal time passed AND auth is not in-flight
+  const splashReady = minTimeElapsed && !auth.loading;
 
   // Reactive session creation: navigate to a new session when it arrives
   const awaitingNewSession = useRef(false);
@@ -68,20 +81,24 @@ export function App() {
     setSettingsOpen(false);
   }, []);
 
-  // Auth gate
+  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
+
+  // Determine content to render (auth screen or main app).
+  // While splash is still visible (including during fadeout), don't mount AuthScreen
+  // so it never flashes underneath the fading overlay. Both backgrounds are #060606.
+  let content: React.ReactNode;
+
   if (!auth.isAuthenticated) {
-    return (
+    content = splashDone ? (
       <AuthScreen
         auth={auth}
         onBootstrapSubmit={authenticateWithBootstrap}
       />
+    ) : (
+      <div className="h-full bg-[#060606]" />
     );
-  }
-
-  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
-
-  if (view === 'terminal' && activeSession) {
-    return (
+  } else if (view === 'terminal' && activeSession) {
+    content = (
       <>
         <TerminalView
           session={activeSession}
@@ -104,10 +121,8 @@ export function App() {
         )}
       </>
     );
-  }
-
-  if (view === 'skin-studio') {
-    return (
+  } else if (view === 'skin-studio') {
+    content = (
       <SkinStudio
         currentSkin={skin}
         onSkinChange={setSkin}
@@ -116,26 +131,34 @@ export function App() {
         onClose={handleCloseSkinStudio}
       />
     );
+  } else {
+    content = (
+      <>
+        <GridView
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSessionSelect={handleSessionSelect}
+          onCreateSession={handleCreateSession}
+          onCloseSession={closeSession}
+          onOpenSettings={handleOpenSettings}
+        />
+        {settingsOpen && (
+          <SettingsPanel
+            onClose={handleCloseSettings}
+            onOpenSkinStudio={handleOpenSkinStudio}
+            sessionCount={sessions.length}
+          />
+        )}
+      </>
+    );
   }
 
   return (
     <>
-      <GridView
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSessionSelect={handleSessionSelect}
-        onCreateSession={handleCreateSession}
-        onCloseSession={closeSession}
-        onOpenSettings={handleOpenSettings}
-      />
-      {settingsOpen && (
-        <SettingsPanel
-          onClose={handleCloseSettings}
-          onOpenSkinStudio={handleOpenSkinStudio}
-          sessionCount={sessions.length}
-        />
+      {content}
+      {!splashDone && (
+        <SplashScreen ready={splashReady} onComplete={() => setSplashDone(true)} />
       )}
-      <PWAInstallBanner />
     </>
   );
 }

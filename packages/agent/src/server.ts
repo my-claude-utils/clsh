@@ -84,6 +84,10 @@ export function createAppServer(
 ): ServerContext {
   const app = express();
 
+  // Trust the first proxy (ngrok/SSH tunnel) so express-rate-limit
+  // reads the real client IP from X-Forwarded-For
+  app.set('trust proxy', 1);
+
   // Security headers
   app.use((_req, res, next) => {
     res.header('X-Frame-Options', 'DENY');

@@ -2,6 +2,7 @@ import type { GridViewProps } from '../lib/types';
 import { SessionCard } from './SessionCard';
 import { NewSessionCard } from './NewSessionCard';
 import { WorkspaceBar } from './WorkspaceBar';
+import { PWAInstallBanner } from './PWAInstallBanner';
 
 /**
  * Phone home screen: tmux-style grid of session cards.
@@ -113,6 +114,9 @@ export function GridView({
           <NewSessionCard onCreateSession={onCreateSession} />
         </div>
       </div>
+
+      {/* PWA install banner (mobile only, above tab bar) */}
+      <PWAInstallBanner />
 
       {/* Workspace bar */}
       <WorkspaceBar

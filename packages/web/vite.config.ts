@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// AGENT_PORT is set by the root dev script (defaults to 4030)
+const agentPort = process.env.AGENT_PORT || '4030'
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
@@ -10,11 +13,11 @@ export default defineConfig({
     allowedHosts: ['.ngrok-free.dev', '.ngrok.io', '.localhost.run', '.lhr.life'],
     proxy: {
       '/ws': {
-        target: 'ws://localhost:4030',
+        target: `ws://localhost:${agentPort}`,
         ws: true,
       },
       '/api': {
-        target: 'http://localhost:4030',
+        target: `http://localhost:${agentPort}`,
       },
     },
   },
