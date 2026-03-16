@@ -15,9 +15,11 @@ export default defineConfig({
       '/ws': {
         target: `ws://localhost:${agentPort}`,
         ws: true,
+        changeOrigin: true,
       },
       '/api': {
         target: `http://localhost:${agentPort}`,
+        changeOrigin: true,
       },
     },
   },

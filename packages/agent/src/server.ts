@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import { join, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { networkInterfaces } from 'node:os';
 import rateLimit from 'express-rate-limit';
 import {
   generateBootstrapToken,
@@ -28,17 +29,43 @@ export interface ServerContext {
 const allowedOrigins = new Set<string>();
 
 /**
+ * Returns the first non-internal IPv4 address (e.g. 192.168.x.x).
+ */
+function getLocalIP(): string | null {
+  const nets = networkInterfaces();
+  for (const interfaces of Object.values(nets)) {
+    if (!interfaces) continue;
+    for (const iface of interfaces) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Updates the set of allowed origins based on the current server port and tunnel URL.
  * Called at startup and whenever the tunnel is recreated.
  */
-export function updateAllowedOrigins(port: number, tunnelUrl?: string): void {
+export function updateAllowedOrigins(port: number, tunnelUrl?: string, webPort?: number): void {
   allowedOrigins.clear();
-  // Local dev origins
-  allowedOrigins.add(`http://localhost:${port}`);
-  allowedOrigins.add(`http://127.0.0.1:${port}`);
-  // Vite dev server (default 4031)
-  allowedOrigins.add('http://localhost:4031');
-  allowedOrigins.add('http://127.0.0.1:4031');
+
+  // All ports that serve the app (agent + vite dev server if different)
+  const ports = new Set([port]);
+  if (webPort && webPort !== port) ports.add(webPort);
+
+  // Hosts: localhost, loopback, and local network IP (phones on same Wi-Fi)
+  const hosts = ['localhost', '127.0.0.1'];
+  const localIP = getLocalIP();
+  if (localIP) hosts.push(localIP);
+
+  for (const host of hosts) {
+    for (const p of ports) {
+      allowedOrigins.add(`http://${host}:${p}`);
+    }
+  }
+
   if (tunnelUrl) {
     try {
       const url = new URL(tunnelUrl);
@@ -153,7 +180,9 @@ export function createAppServer(
       const origin = info.origin;
       // Allow connections with no origin header (non-browser clients, CLIs)
       if (!origin) return true;
-      return allowedOrigins.has(origin);
+      if (allowedOrigins.has(origin)) return true;
+      console.warn(`  WS rejected: origin "${origin}" not in [${[...allowedOrigins].join(', ')}]`);
+      return false;
     },
   });
 

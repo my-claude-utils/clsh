@@ -127,7 +127,7 @@ export async function main(): Promise<void> {
   const tunnel = await createTunnel(tunnelPort, config.ngrokAuthtoken, config.ngrokStaticDomain, config.tunnelMethod);
 
   // 10. Set allowed origins for CORS and WebSocket origin checks
-  updateAllowedOrigins(actualPort, tunnel.url);
+  updateAllowedOrigins(actualPort, tunnel.url, config.webPort);
 
   // 11. Print clean startup info
   printAccessInfo(tunnel.url, currentBootstrapToken, tunnel.method);
@@ -135,7 +135,7 @@ export async function main(): Promise<void> {
   // 12. Monitor tunnel health — auto-recovers after sleep/wake or SSH death
   const stopTunnelMonitor = startTunnelMonitor((newUrl, method) => {
     // Tunnel was recreated with a (possibly new) URL — reprint access info and update origins
-    updateAllowedOrigins(actualPort, newUrl);
+    updateAllowedOrigins(actualPort, newUrl, config.webPort);
     printAccessInfo(newUrl, currentBootstrapToken, method);
   });
 

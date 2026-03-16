@@ -17,7 +17,9 @@ export function GridView({
   onCreateSession,
   onCloseSession,
   onOpenSettings,
+  wsStatus,
 }: GridViewProps) {
+  const isConnected = wsStatus === 'connected';
   return (
     <div
       className="flex flex-col"
@@ -92,6 +94,40 @@ export function GridView({
           Active Workspaces
         </span>
       </div>
+
+      {/* Connection status banner */}
+      {!isConnected && (
+        <div
+          className="mx-3 mb-2 rounded-lg px-3 py-2 flex items-center gap-2"
+          style={{
+            background: wsStatus === 'reconnecting' || wsStatus === 'connecting'
+              ? 'rgba(249, 115, 22, 0.1)'
+              : 'rgba(239, 68, 68, 0.1)',
+            border: `1px solid ${
+              wsStatus === 'reconnecting' || wsStatus === 'connecting'
+                ? 'rgba(249, 115, 22, 0.3)'
+                : 'rgba(239, 68, 68, 0.3)'
+            }`,
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: wsStatus === 'reconnecting' || wsStatus === 'connecting' ? '#f97316' : '#ef4444',
+              animation: wsStatus === 'reconnecting' || wsStatus === 'connecting' ? 'pulse-dot 1.5s infinite' : 'none',
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: 11, color: '#999' }}>
+            {wsStatus === 'reconnecting' || wsStatus === 'connecting'
+              ? 'Reconnecting to server...'
+              : 'Disconnected. Re-scan QR code or check if server is running.'}
+          </span>
+        </div>
+      )}
 
       {/* Card grid */}
       <div

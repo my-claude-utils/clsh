@@ -146,6 +146,9 @@ export class TerminalWSClient {
         }
         this.stopPing();
         this.onStatusChange('disconnected');
+        if (event.code !== 1000) {
+          console.warn(`[clsh] WS closed: code=${String(event.code)} reason="${event.reason}"`);
+        }
         // 4001 = backend rejected token (expired JWT or backend restarted).
         // Stop reconnecting — the stored token is no longer valid.
         if (event.code === 4001) {
@@ -158,6 +161,7 @@ export class TerminalWSClient {
       };
 
       this.ws.onerror = () => {
+        console.warn('[clsh] WS connection error');
         // onclose will fire after onerror, so reconnect is handled there
       };
     });

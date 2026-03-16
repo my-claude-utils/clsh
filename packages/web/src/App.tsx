@@ -13,7 +13,7 @@ import type { View } from './lib/types';
 
 export function App() {
   const { auth, authenticateWithBootstrap, handleUnauthorized } = useAuth();
-  const { sessions, wsClient, messageBus, createSession, closeSession, getSessionOutput, setSessionSnapshot, renameSession } = useSessionManager(auth, handleUnauthorized);
+  const { sessions, wsClient, messageBus, createSession, closeSession, getSessionOutput, setSessionSnapshot, renameSession, status: wsStatus } = useSessionManager(auth, handleUnauthorized);
   const { skin, setSkin, perKeyColors, setPerKeyColors } = useSkin();
 
   const [view, setView] = useState<View>('grid');
@@ -141,6 +141,7 @@ export function App() {
           onCreateSession={handleCreateSession}
           onCloseSession={closeSession}
           onOpenSettings={handleOpenSettings}
+          wsStatus={wsStatus}
         />
         {settingsOpen && (
           <SettingsPanel

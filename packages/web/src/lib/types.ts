@@ -65,6 +65,7 @@ export interface GridViewProps {
   onCreateSession: () => void;
   onCloseSession: (sessionId: string) => void;
   onOpenSettings: () => void;
+  wsStatus: import('./ws-client').ConnectionStatus;
 }
 
 export interface TerminalViewProps {
