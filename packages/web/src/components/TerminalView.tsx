@@ -22,9 +22,10 @@ export function TerminalView({
   onOpenSettings,
   skin,
   perKeyColors,
+  nativeKeyboard,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { terminal, write, getDimensions, captureScreen, scrollToBottom } = useTerminal(containerRef);
+  const { terminal, write, getDimensions, captureScreen, scrollToBottom } = useTerminal(containerRef, { nativeKeyboard });
 
   // Rename editing state — lifted here so we can intercept keyboard input
   const [renaming, setRenaming] = useState(false);
@@ -51,7 +52,7 @@ export function TerminalView({
     return unsubscribe;
   }, [terminal, messageBus, session.id, write, getSessionOutput]);
 
-  // Wire terminal input and resize to WebSocket
+  // Wire terminal resize to WebSocket
   useEffect(() => {
     if (!terminal || !wsClient) return;
 
@@ -123,6 +124,15 @@ export function TerminalView({
     [renaming, commitRename, cancelRename, wsClient, session.id, scrollToBottom],
   );
 
+  // When native keyboard is enabled, wire xterm's onData to send keystrokes
+  useEffect(() => {
+    if (!terminal || !nativeKeyboard) return;
+    const disposable = terminal.onData((data: string) => {
+      handleKey(data);
+    });
+    return () => disposable.dispose();
+  }, [terminal, nativeKeyboard, handleKey]);
+
   const handleBack = useCallback(() => {
     onBack(captureScreen());
   }, [onBack, captureScreen]);
@@ -159,11 +169,15 @@ export function TerminalView({
         }}
       />
 
-      <ContextStrip onKey={handleKey} />
-      {skin === 'ios-terminal' ? (
-        <IOSKeyboard onKey={handleKey} skin={skin} perKeyColors={perKeyColors} />
-      ) : (
-        <MacBookKeyboard onKey={handleKey} skin={skin} perKeyColors={perKeyColors} />
+      {!nativeKeyboard && (
+        <>
+          <ContextStrip onKey={handleKey} />
+          {skin === 'ios-terminal' ? (
+            <IOSKeyboard onKey={handleKey} skin={skin} perKeyColors={perKeyColors} />
+          ) : (
+            <MacBookKeyboard onKey={handleKey} skin={skin} perKeyColors={perKeyColors} />
+          )}
+        </>
       )}
     </div>
   );

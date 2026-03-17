@@ -11,6 +11,7 @@ import { LockScreen } from './components/LockScreen';
 import { useAuth } from './hooks/useAuth';
 import { useSessionManager } from './hooks/useSessionManager';
 import { useSkin } from './hooks/useSkin';
+import { useNativeKeyboard } from './hooks/useNativeKeyboard';
 import { useLockScreen } from './hooks/useLockScreen';
 import { getBiometricIds, getClientPwdHash } from './lib/lock-screen';
 import type { View } from './lib/types';
@@ -19,6 +20,7 @@ export function App() {
   const { auth, authenticateWithBootstrap, authenticateWithPassword, authenticateWithBiometric, handleUnauthorized } = useAuth();
   const { sessions, wsClient, messageBus, createSession, closeSession, getSessionOutput, setSessionSnapshot, renameSession, status: wsStatus } = useSessionManager(auth, handleUnauthorized);
   const { skin, setSkin, perKeyColors, setPerKeyColors } = useSkin();
+  const { nativeKeyboard, setNativeKeyboard } = useNativeKeyboard();
   const { isLocked, needsSetup, biometricAvailable, hasBiometric, unlock, completeLockSetup } = useLockScreen(auth.isAuthenticated);
 
   const [view, setView] = useState<View>('grid');
@@ -150,6 +152,7 @@ export function App() {
           onRenameSession={renameSession}
           skin={skin}
           perKeyColors={perKeyColors}
+          nativeKeyboard={nativeKeyboard}
         />
         {settingsOpen && (
           <SettingsPanel
@@ -168,6 +171,8 @@ export function App() {
         perKeyColors={perKeyColors}
         onPerKeyColorChange={setPerKeyColors}
         onClose={handleCloseSkinStudio}
+        nativeKeyboard={nativeKeyboard}
+        onNativeKeyboardChange={setNativeKeyboard}
       />
     );
   } else {

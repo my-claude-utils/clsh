@@ -30,6 +30,7 @@ interface UseTerminalReturn {
  */
 export function useTerminal(
   containerRef: RefObject<HTMLDivElement | null>,
+  options?: { nativeKeyboard?: boolean },
 ): UseTerminalReturn {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -81,28 +82,8 @@ export function useTerminal(
 
       try { fitAddon.fit(); } catch { /* ignore */ }
 
-      // Suppress iOS keyboard on xterm's helper textarea completely:
-      // move it off-screen and remove pointer events so tapping the
-      // terminal area never triggers the iOS system keyboard.
-      const suppressTextarea = () => {
-        container.querySelectorAll<HTMLTextAreaElement>('.xterm-helper-textarea').forEach((t) => {
-          t.setAttribute('inputmode', 'none');
-          t.setAttribute('readonly', 'readonly');
-          t.style.position = 'fixed';
-          t.style.top = '-9999px';
-          t.style.left = '-9999px';
-          t.style.pointerEvents = 'none';
-          t.style.opacity = '0';
-          // Blur in case it already has focus
-          t.blur();
-        });
-      };
-      suppressTextarea();
-      // xterm may recreate the textarea on first input event — rerun
-      setTimeout(suppressTextarea, 150);
-
-      // Prevent iOS keyboard on any tap inside the terminal area
-      container.addEventListener('touchstart', suppressTextarea, { passive: true });
+      // Textarea suppression is handled by a separate effect that reacts
+      // to the nativeKeyboard option (see below).
 
       // Add momentum scrolling to the xterm viewport
       addMomentumScroll(terminal, container);
@@ -140,6 +121,54 @@ export function useTerminal(
       // will unmount anyway, and calling setState on unmount causes warnings.
     };
   }, [containerRef]);
+
+  // Reactive textarea suppression: suppress iOS keyboard unless native keyboard is enabled.
+  const nativeKeyboard = options?.nativeKeyboard ?? false;
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !terminalReady) return;
+
+    const textareas = () =>
+      container.querySelectorAll<HTMLTextAreaElement>('.xterm-helper-textarea');
+
+    if (nativeKeyboard) {
+      // Restore xterm's textarea so physical keyboard input works
+      textareas().forEach((t) => {
+        t.removeAttribute('inputmode');
+        t.removeAttribute('readonly');
+        t.style.position = '';
+        t.style.top = '';
+        t.style.left = '';
+        t.style.pointerEvents = '';
+        t.style.opacity = '';
+        t.focus();
+      });
+      return; // no suppression, no touchstart listener
+    }
+
+    // Suppress: move off-screen, prevent iOS keyboard
+    const suppress = () => {
+      textareas().forEach((t) => {
+        t.setAttribute('inputmode', 'none');
+        t.setAttribute('readonly', 'readonly');
+        t.style.position = 'fixed';
+        t.style.top = '-9999px';
+        t.style.left = '-9999px';
+        t.style.pointerEvents = 'none';
+        t.style.opacity = '0';
+        t.blur();
+      });
+    };
+    suppress();
+    // xterm may recreate the textarea on first input event
+    const timer = setTimeout(suppress, 150);
+    container.addEventListener('touchstart', suppress, { passive: true });
+
+    return () => {
+      clearTimeout(timer);
+      container.removeEventListener('touchstart', suppress);
+    };
+  }, [containerRef, terminalReady, nativeKeyboard]);
 
   const write = useCallback((data: string) => {
     terminalRef.current?.write(data);

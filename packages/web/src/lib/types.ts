@@ -81,6 +81,7 @@ export interface TerminalViewProps {
   onRenameSession: (sessionId: string, name: string) => void;
   skin: SkinId;
   perKeyColors: PerKeyColors;
+  nativeKeyboard: boolean;
 }
 
 export interface MacBookKeyboardProps {
@@ -100,4 +101,6 @@ export interface SkinStudioProps {
   perKeyColors: PerKeyColors;
   onPerKeyColorChange: (colors: PerKeyColors) => void;
   onClose: () => void;
+  nativeKeyboard: boolean;
+  onNativeKeyboardChange: (enabled: boolean) => void;
 }

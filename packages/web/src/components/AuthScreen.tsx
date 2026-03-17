@@ -339,7 +339,7 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
               <form onSubmit={(e) => void handleBootstrapSubmit(e)} className="space-y-4">
                 <div>
                   <label htmlFor="bootstrap-token" className="mb-1.5 block text-xs font-medium text-neutral-400">
-                    Bootstrap Token
+                    One-Time Token
                   </label>
                   <div className="relative flex items-center">
                     <input
@@ -386,7 +386,7 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
               )}
 
               <p className="mt-6 text-center text-xs text-neutral-600">
-                Run <code className="text-neutral-400">npx clsh-dev</code> on your Mac, then copy the token from the terminal output.
+                Run <code className="text-neutral-400">npx clsh-dev</code> on your Mac, then copy the one-time token from the terminal output.
               </p>
             </>
           )}

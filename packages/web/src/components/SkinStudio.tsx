@@ -46,7 +46,10 @@ export default function SkinStudio({
   onSkinChange,
   perKeyColors,
   onClose,
+  nativeKeyboard,
+  onNativeKeyboardChange,
 }: SkinStudioProps) {
+  const showNativeToggle = typeof window !== 'undefined' && window.innerWidth >= 768;
 
   return (
     <div
@@ -97,6 +100,83 @@ export default function SkinStudio({
           {SKIN_ORDER.length} themes
         </span>
       </div>
+
+      {/* ── Native Keyboard Toggle (tablet/desktop only) ─────── */}
+      {showNativeToggle && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderBottom: '1px solid #1a1a1a',
+            background: '#0a0a0a',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => onNativeKeyboardChange(!nativeKeyboard)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              background: '#111',
+              border: '1px solid #222',
+              borderRadius: 10,
+              padding: '12px 14px',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{ textAlign: 'left' }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#ccc',
+                  fontFamily: "'Space Grotesk', -apple-system, sans-serif",
+                }}
+              >
+                Native Keyboard
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: '#555',
+                  marginTop: 2,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                Use your device's physical keyboard
+              </div>
+            </div>
+            {/* Toggle switch */}
+            <div
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                background: nativeKeyboard ? '#f97316' : '#333',
+                position: 'relative',
+                transition: 'background 0.2s',
+                flexShrink: 0,
+                marginLeft: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: '#fff',
+                  position: 'absolute',
+                  top: 2,
+                  left: nativeKeyboard ? 22 : 2,
+                  transition: 'left 0.2s',
+                }}
+              />
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* ── Live Preview ────────────────────────────────────────── */}
       <div style={{ background: '#111111', padding: 16, flexShrink: 0 }}>
