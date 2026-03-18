@@ -6,7 +6,7 @@
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 export type SessionStatus = 'run' | 'idle';
-export type ShellType = 'zsh' | 'tmux' | 'claude';
+export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude';
 
 export interface Session {
   id: string;           // server-assigned UUID

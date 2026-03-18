@@ -25,7 +25,7 @@ function sendError(ws: WebSocket, message: string): void {
 }
 
 function isValidShell(shell: unknown): shell is ShellType {
-  return shell === 'zsh' || shell === 'tmux' || shell === 'claude';
+  return shell === 'bash' || shell === 'zsh' || shell === 'tmux' || shell === 'claude';
 }
 
 function parseClientMessage(raw: string): ClientMessage | null {

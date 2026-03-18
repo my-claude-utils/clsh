@@ -1,5 +1,5 @@
 /** Shell types supported by the PTY manager. */
-export type ShellType = 'zsh' | 'tmux' | 'claude';
+export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude';
 
 /** Messages sent from client to server over WebSocket. */
 export type ClientMessage =

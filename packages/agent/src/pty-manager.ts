@@ -30,13 +30,14 @@ const SENSITIVE_ENV_VARS: ReadonlyArray<string> = [
 
 /** Maps shell types to their executable and arguments. */
 const SHELL_MAP: Record<ShellType, [string, string[]]> = {
+  bash: ['bash', ['--login']],
   zsh: ['zsh', ['-l']],
   tmux: ['tmux', ['new-session', '-A', '-s', 'dev']],
   claude: ['claude', []],
 };
 
 /** Shell types that can be wrapped in tmux for persistence. */
-const TMUX_WRAPPABLE: Set<ShellType> = new Set(['zsh', 'claude']);
+const TMUX_WRAPPABLE: Set<ShellType> = new Set(['bash', 'zsh', 'claude']);
 
 /** Session metadata passed to update listeners. */
 export interface SessionMeta {
