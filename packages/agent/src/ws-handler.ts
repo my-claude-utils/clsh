@@ -195,7 +195,7 @@ function handleSessionCreate(
 
   let session: PTYSession;
   try {
-    session = ptyManager.create(shell as ShellType | undefined, 80, 24, name);
+    session = ptyManager.create(shell, 80, 24, name);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Failed to create session';
     sendError(ws, errMsg);
