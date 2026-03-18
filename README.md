@@ -303,7 +303,7 @@ You can also use environment variables:
 NGROK_AUTHTOKEN=your_token                        # For permanent URL
 NGROK_STATIC_DOMAIN=your-subdomain.ngrok-free.dev # Static ngrok domain
 CLSH_PORT=4030                                    # Agent port (default: 4030)
-CLSH_SHELL=bash                                   # Default shell (auto-detected if unset)
+CLSH_SHELL=zsh                                   # Default shell (auto-detected if unset)
 CLSH_NO_TMUX=1                                    # Disable tmux session persistence
 CLSH_NO_OPEN=1                                    # Skip auto-opening browser
 TUNNEL=ssh                                        # Force tunnel method: ssh | local
