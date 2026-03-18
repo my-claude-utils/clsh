@@ -6,7 +6,7 @@ export type ClientMessage =
   | { type: 'auth'; token: string }
   | { type: 'stdin'; sessionId: string; data: string }
   | { type: 'resize'; sessionId: string; cols: number; rows: number }
-  | { type: 'session_create'; shell: 'bash' | 'zsh' | 'tmux' | 'claude' }
+  | { type: 'session_create'; shell?: 'bash' | 'zsh' | 'tmux' | 'claude' }
   | { type: 'session_close'; sessionId: string }
   | { type: 'session_rename'; sessionId: string; name: string }
   | { type: 'session_subscribe'; sessionId: string }

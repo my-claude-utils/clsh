@@ -214,7 +214,7 @@ export function useSessionManager(
   }
 
   const createSession = useCallback((): void => {
-    wsClient?.send({ type: 'session_create', shell: 'zsh' });
+    wsClient?.send({ type: 'session_create' });
   }, [wsClient]);
 
   const closeSession = useCallback(

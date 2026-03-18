@@ -1,12 +1,15 @@
 /** Shell types supported by the PTY manager. */
 export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude';
 
+/** Shell types that can be used as the server default (excludes tmux/claude). */
+export type DefaultableShell = 'bash' | 'zsh';
+
 /** Messages sent from client to server over WebSocket. */
 export type ClientMessage =
   | { type: 'auth'; token: string }
   | { type: 'stdin'; sessionId: string; data: string }
   | { type: 'resize'; sessionId: string; cols: number; rows: number }
-  | { type: 'session_create'; shell: ShellType; name?: string }
+  | { type: 'session_create'; shell?: ShellType; name?: string }
   | { type: 'session_close'; sessionId: string }
   | { type: 'session_rename'; sessionId: string; name: string }
   | { type: 'session_subscribe'; sessionId: string }

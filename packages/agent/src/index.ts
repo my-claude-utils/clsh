@@ -103,6 +103,7 @@ export async function main(): Promise<void> {
     tmuxEnabled,
     tmuxConfPath,
     dbStatements: statements,
+    defaultShell: config.defaultShell,
   });
 
   // 7. Recover sessions from previous server run (tmux sessions survive restarts)

@@ -182,19 +182,20 @@ function handleMessage(
 
 function handleSessionCreate(
   ws: WebSocket,
-  shell: ShellType | unknown,
+  shell: ShellType | undefined | unknown,
   name: string | undefined,
   ptyManager: PTYManager,
   subscriptions: SubscriptionMap,
 ): void {
-  if (!isValidShell(shell)) {
+  // If shell is provided, validate it; if omitted, PTYManager uses its defaultShell
+  if (shell !== undefined && !isValidShell(shell)) {
     sendError(ws, `Invalid shell type: ${String(shell)}`);
     return;
   }
 
   let session: PTYSession;
   try {
-    session = ptyManager.create(shell, 80, 24, name);
+    session = ptyManager.create(shell as ShellType | undefined, 80, 24, name);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Failed to create session';
     sendError(ws, errMsg);
@@ -211,7 +212,7 @@ function handleSessionCreate(
   send(ws, {
     type: 'session',
     sessionId: session.id,
-    shell,
+    shell: session.shell,
     pid: session.pty.pid,
     name: session.name,
     cwd: session.cwd,

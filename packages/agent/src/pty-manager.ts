@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename } from 'node:path';
-import type { ShellType } from './types.js';
+import type { ShellType, DefaultableShell } from './types.js';
 import type { DbStatements } from './db.js';
 import { tmuxSessionExists, killTmuxSession, listClshTmuxSessions, capturePaneContent, TMUX_SOCKET } from './tmux.js';
 import { ControlModeLineBuffer, buildSendKeysCommands } from './control-mode-parser.js';
@@ -68,6 +68,7 @@ export interface PTYManagerOptions {
   tmuxEnabled?: boolean;
   tmuxConfPath?: string | null;
   dbStatements?: DbStatements;
+  defaultShell: DefaultableShell;
 }
 
 /**
@@ -114,11 +115,13 @@ export class PTYManager {
   private tmuxEnabled: boolean;
   private tmuxConfPath: string | null;
   private db: DbStatements | null;
+  private defaultShell: DefaultableShell;
 
-  constructor(options?: PTYManagerOptions) {
-    this.tmuxEnabled = options?.tmuxEnabled ?? false;
-    this.tmuxConfPath = options?.tmuxConfPath ?? null;
-    this.db = options?.dbStatements ?? null;
+  constructor(options: PTYManagerOptions) {
+    this.tmuxEnabled = options.tmuxEnabled ?? false;
+    this.tmuxConfPath = options.tmuxConfPath ?? null;
+    this.db = options.dbStatements ?? null;
+    this.defaultShell = options.defaultShell;
 
     this.idleCheckInterval = setInterval(() => {
       this.checkIdleSessions();
@@ -258,25 +261,26 @@ export class PTYManager {
    * Falls back to raw PTY if tmux is unavailable.
    */
   create(
-    shell: ShellType,
+    shell?: ShellType,
     cols: number = 80,
     rows: number = 24,
     name?: string,
   ): PTYSession {
+    const resolvedShell: ShellType = shell ?? this.defaultShell;
     if (this.sessions.size >= MAX_SESSIONS) {
       throw new Error(`Session limit reached (max ${MAX_SESSIONS}). Close a session first.`);
     }
 
     const id = randomUUID();
     const initialCwd = homedir();
-    const wrap = this.shouldWrapInTmux(shell);
+    const wrap = this.shouldWrapInTmux(resolvedShell);
     const tmuxName = wrap ? `clsh-${id}` : null;
 
     let cmd: string;
     let args: string[];
 
     if (wrap && this.tmuxConfPath) {
-      const [innerCmd, innerArgs] = SHELL_MAP[shell];
+      const [innerCmd, innerArgs] = SHELL_MAP[resolvedShell];
       cmd = 'tmux';
       args = [
         '-CC',
@@ -289,7 +293,7 @@ export class PTYManager {
         innerCmd, ...innerArgs,
       ];
     } else {
-      [cmd, args] = SHELL_MAP[shell];
+      [cmd, args] = SHELL_MAP[resolvedShell];
     }
 
     const pty = spawn(cmd, args, {
@@ -307,10 +311,10 @@ export class PTYManager {
 
     const session: PTYSession = {
       id,
-      shell,
+      shell: resolvedShell,
       pty,
       buffer,
-      name: name ?? shell,
+      name: name ?? resolvedShell,
       cwd: initialCwd,
       status: 'idle',
       lastActivityAt: Date.now(),
@@ -335,7 +339,7 @@ export class PTYManager {
     // Persist to DB for rediscovery
     if (tmuxName && this.db) {
       try {
-        this.db.insertPtySession.run(id, tmuxName, shell, session.name, session.cwd);
+        this.db.insertPtySession.run(id, tmuxName, resolvedShell, session.name, session.cwd);
       } catch { /* non-critical */ }
     }
 

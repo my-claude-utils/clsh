@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import type { DefaultableShell } from './types.js';
 
 export interface AgentConfig {
   port: number;
@@ -23,6 +25,9 @@ export interface AgentConfig {
   dbPath: string;
   /** Set CLSH_NO_TMUX=1 to disable tmux session persistence even when tmux is available. */
   tmuxDisabled: boolean;
+  /** Resolved default shell for new terminal sessions.
+   *  Set CLSH_SHELL=bash|zsh to override; otherwise auto-detected at startup. */
+  defaultShell: DefaultableShell;
 }
 
 interface ClshConfigFile {
@@ -128,6 +133,53 @@ function getOrCreateJwtSecret(clshDir: string): string {
   return secret;
 }
 
+const DEFAULTABLE_SHELLS: ReadonlyArray<DefaultableShell> = ['zsh', 'bash'];
+
+function isDefaultableShell(value: string): value is DefaultableShell {
+  return DEFAULTABLE_SHELLS.includes(value as DefaultableShell);
+}
+
+function shellExists(shell: string): boolean {
+  try {
+    execSync(`command -v ${shell}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves the default shell for new terminal sessions.
+ * Priority: CLSH_SHELL env var > auto-detect (zsh > bash).
+ * Returns the shell and the source for startup logging.
+ */
+function detectDefaultShell(): { shell: DefaultableShell; source: string } {
+  const override = getEnv('CLSH_SHELL');
+  if (override) {
+    if (!isDefaultableShell(override)) {
+      throw new Error(
+        `Invalid CLSH_SHELL value: "${override}". Valid options: ${DEFAULTABLE_SHELLS.join(', ')}`,
+      );
+    }
+    if (!shellExists(override)) {
+      throw new Error(
+        `CLSH_SHELL is set to "${override}" but it is not installed. Install it or choose another shell.`,
+      );
+    }
+    return { shell: override, source: 'CLSH_SHELL' };
+  }
+
+  for (const candidate of DEFAULTABLE_SHELLS) {
+    if (shellExists(candidate)) {
+      return { shell: candidate, source: 'auto-detected' };
+    }
+  }
+
+  throw new Error(
+    `No supported shell found. Install one of: ${DEFAULTABLE_SHELLS.join(', ')}`,
+  );
+}
+
 export function loadConfig(): AgentConfig {
   // Priority: env vars > .env > ~/.clsh/config.json > defaults
   loadDotEnv();
@@ -136,6 +188,8 @@ export function loadConfig(): AgentConfig {
   const clshDir = join(homedir(), '.clsh');
   const defaultDbPath = join(clshDir, 'clsh.db');
   const port = parseInt(getEnv('PORT') ?? (fileConfig.port != null ? String(fileConfig.port) : '4030'), 10);
+  const { shell: defaultShell, source: shellSource } = detectDefaultShell();
+  console.log(`  Default shell: ${defaultShell} (${shellSource})`);
 
   return {
     port,
@@ -147,5 +201,6 @@ export function loadConfig(): AgentConfig {
     resendApiKey: getEnv('RESEND_API_KEY'),
     dbPath: getEnv('DB_PATH') ?? defaultDbPath,
     tmuxDisabled: getEnv('CLSH_NO_TMUX') === '1',
+    defaultShell,
   };
 }
