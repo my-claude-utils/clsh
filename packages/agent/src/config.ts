@@ -23,6 +23,10 @@ export interface AgentConfig {
   dbPath: string;
   /** Set CLSH_NO_TMUX=1 to disable tmux session persistence even when tmux is available. */
   tmuxDisabled: boolean;
+  /** Path to whisper.cpp CLI binary. Default: 'whisper-cli' (brew install whisper-cpp) */
+  whisperCppPath: string;
+  /** Path to whisper.cpp model file. Required for voice dictation. */
+  whisperModel: string | undefined;
 }
 
 interface ClshConfigFile {
@@ -147,5 +151,7 @@ export function loadConfig(): AgentConfig {
     resendApiKey: getEnv('RESEND_API_KEY'),
     dbPath: getEnv('DB_PATH') ?? defaultDbPath,
     tmuxDisabled: getEnv('CLSH_NO_TMUX') === '1',
+    whisperCppPath: getEnv('WHISPER_CPP_PATH') ?? 'whisper-cli',
+    whisperModel: getEnv('WHISPER_MODEL'),
   };
 }

@@ -3,9 +3,12 @@ import { createServer as createNetServer } from 'node:net';
 import { createServer, type Server as HttpServer, type IncomingMessage } from 'node:http';
 import { WebSocketServer } from 'ws';
 import { join, dirname } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { networkInterfaces } from 'node:os';
+import { networkInterfaces, tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import {
   generateBootstrapToken,
@@ -150,6 +153,9 @@ export function createAppServer(
 
   // Auth routes (rate-limited)
   mountAuthRoutes(app, config, statements);
+
+  // Voice dictation: POST /api/transcribe
+  mountTranscribeRoute(app, config);
 
   // Static file serving (web dist)
   const webDistPath = findWebDist();
@@ -460,6 +466,90 @@ function mountAuthRoutes(
     }
   });
 
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Mounts the POST /api/transcribe route for voice dictation via whisper.cpp.
+ * Accepts multipart audio, writes to temp file, runs whisper.cpp, returns text.
+ */
+function mountTranscribeRoute(app: Express, config: AgentConfig): void {
+  const upload = multer({
+    dest: join(tmpdir(), 'clsh-audio'),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+  });
+
+  app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
+    try {
+      // JWT auth check
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Authorization required' });
+        return;
+      }
+      try {
+        await verifyJWT(authHeader.slice(7), config.jwtSecret);
+      } catch {
+        res.status(401).json({ error: 'Invalid or expired token' });
+        return;
+      }
+
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: 'No audio file provided' });
+        return;
+      }
+
+      if (!config.whisperModel) {
+        res.status(503).json({ error: 'WHISPER_MODEL not configured on server' });
+        cleanup(file.path);
+        return;
+      }
+
+      // whisper-cli only supports wav/mp3/ogg/flac — convert from webm/mp4 via ffmpeg
+      const wavPath = file.path + '.wav';
+      try {
+        await execFileAsync('ffmpeg', [
+          '-i', file.path,
+          '-ar', '16000',   // 16 kHz mono — optimal for whisper
+          '-ac', '1',
+          '-y',              // overwrite
+          wavPath,
+        ], { timeout: 10_000 });
+
+        const { stdout } = await execFileAsync(config.whisperCppPath, [
+          '--model', config.whisperModel,
+          '--no-prints',
+          '--no-timestamps',
+          '--file', wavPath,
+        ], { timeout: 30_000 });
+
+        // whisper.cpp prints transcribed text to stdout (one line per segment)
+        const text = stdout
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+
+        res.json({ text });
+      } catch (err) {
+        console.error('whisper.cpp error:', err);
+        res.status(500).json({ error: 'Transcription failed' });
+      } finally {
+        cleanup(file.path);
+        cleanup(wavPath);
+      }
+    } catch (err) {
+      console.error('Transcribe error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+}
+
+function cleanup(filePath: string): void {
+  try { unlinkSync(filePath); } catch { /* ignore */ }
 }
 
 /**

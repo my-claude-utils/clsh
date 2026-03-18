@@ -93,6 +93,7 @@ export interface MacBookKeyboardProps {
 
 export interface ContextStripProps {
   onKey: (data: string) => void;
+  onDictatedText: (text: string) => void;
 }
 
 export interface SkinStudioProps {

@@ -133,6 +133,14 @@ export function TerminalView({
     return () => disposable.dispose();
   }, [terminal, nativeKeyboard, handleKey]);
 
+  const handleDictatedText = useCallback(
+    (text: string) => {
+      scrollToBottom();
+      wsClient?.send({ type: 'stdin', sessionId: session.id, data: text });
+    },
+    [wsClient, session.id, scrollToBottom],
+  );
+
   const handleBack = useCallback(() => {
     onBack(captureScreen());
   }, [onBack, captureScreen]);
@@ -171,7 +179,7 @@ export function TerminalView({
 
       {!nativeKeyboard && (
         <>
-          <ContextStrip onKey={handleKey} />
+          <ContextStrip onKey={handleKey} onDictatedText={handleDictatedText} />
           {skin === 'ios-terminal' ? (
             <IOSKeyboard onKey={handleKey} skin={skin} perKeyColors={perKeyColors} />
           ) : (

@@ -138,6 +138,7 @@ We believe in transparency. If you find something, [open a security advisory](ht
 - **Sticky modifiers** — tap Shift/Ctrl/Opt/Cmd once, it stays for the next key
 - **Key repeat** — hold any key for auto-repeat (400ms delay, 60ms interval)
 - **Context strip** — quick-access: esc, F1-F5, commit, diff, plan, Ctrl+C
+- **Voice dictation** — hold-to-talk mic button, transcribed locally via whisper.cpp
 - **6 skins** — iOS Terminal, MacBook Silver, Gamer RGB, Custom Painted, Amber Retro, Ice White
 
 ### Connectivity
@@ -211,6 +212,34 @@ CLSH_NO_TMUX=1 npx clsh-dev
 ```
 
 **How it works under the hood:** clsh uses tmux control mode (`-CC`) instead of normal tmux attachment. Control mode sends raw terminal output as structured notifications (`%output`) instead of screen redraws, which means xterm.js gets the original byte stream and scrollback works perfectly. User input is forwarded via `send-keys -H` (hex-encoded). On server restart, `capture-pane` recovers the existing scrollback and control mode resumes live streaming.
+
+## Voice Dictation (optional)
+
+Hold the **mic** button on the context strip to dictate text. Audio is recorded on your phone, sent to the clsh agent, and transcribed locally using [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — nothing leaves your machine.
+
+### Setup
+
+```bash
+# 1. Install whisper.cpp
+brew install whisper-cpp
+
+# 2. Download a model (~142MB, English-only, fast)
+curl -L -o /opt/homebrew/share/whisper-cpp/ggml-base.en.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+
+# 3. Set the model path in .env
+echo 'WHISPER_MODEL=/opt/homebrew/share/whisper-cpp/ggml-base.en.bin' >> .env
+```
+
+Requires `ffmpeg` for audio conversion (`brew install ffmpeg`).
+
+| Model | Size | Speed | Quality |
+|-------|------|-------|---------|
+| `ggml-tiny.en.bin` | 75 MB | Fastest | Good for short commands |
+| `ggml-base.en.bin` | 142 MB | Fast | Recommended |
+| `ggml-small.en.bin` | 466 MB | Moderate | Best accuracy |
+
+The `WHISPER_CPP_PATH` env var overrides the binary path (default: `whisper-cli`).
 
 ## Lid-Close Mode (optional)
 
@@ -306,6 +335,8 @@ CLSH_PORT=4030                                    # Agent port (default: 4030)
 CLSH_NO_TMUX=1                                    # Disable tmux session persistence
 CLSH_NO_OPEN=1                                    # Skip auto-opening browser
 TUNNEL=ssh                                        # Force tunnel method: ssh | local
+WHISPER_MODEL=/path/to/ggml-base.en.bin           # Whisper model for voice dictation
+WHISPER_CPP_PATH=whisper-cli                      # Whisper binary (default: whisper-cli)
 ```
 
 For development, create a `.env` file in the project root. See `.env.example` for all options.
@@ -323,6 +354,7 @@ For development, create a `.env` file in the project root. See `.env.example` fo
 - [x] PWA with fullscreen standalone mode
 - [x] Demo mode for showcasing
 - [x] Session persistence (tmux control mode — sessions survive restarts)
+- [x] Voice dictation via whisper.cpp (hold-to-talk, fully local)
 - [ ] Remote cloud machines (containers instead of local tunnel)
 - [ ] Team sharing (shared sessions with presence)
 - [ ] iOS/Android native app
