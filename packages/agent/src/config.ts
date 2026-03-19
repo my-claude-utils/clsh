@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -141,7 +141,7 @@ function isDefaultableShell(value: string): value is DefaultableShell {
 
 function shellExists(shell: string): boolean {
   try {
-    execSync(`command -v ${shell}`, { stdio: 'ignore' });
+    execFileSync('sh', ['-c', 'command -v -- "$1"', '--', shell], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
