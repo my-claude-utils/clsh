@@ -108,6 +108,12 @@ function findWebDist(): string | null {
 /** Maximum total WebSocket connections allowed (Finding #11). */
 const MAX_WS_CONNECTIONS = 50
 
+/** Track consecutive password failures for lockout (Finding #3). */
+let consecutivePasswordFailures = 0
+let lockoutUntil = 0
+const MAX_CONSECUTIVE_FAILURES = 10
+const LOCKOUT_DURATION_MS = 60 * 60 * 1000 // 1 hour
+
 /**
  * Creates and configures the Express app, HTTP server, and WebSocketServer.
  * Mounts auth routes, SSE routes, health check, and static file serving.
@@ -319,6 +325,14 @@ function mountAuthRoutes(
   // POST /api/auth/password — authenticate with password (unauthenticated)
   app.post('/api/auth/password', passwordLimiter, async (req, res) => {
     try {
+      // Account lockout check (Finding #3)
+      if (Date.now() < lockoutUntil) {
+        const remainingMin = Math.ceil((lockoutUntil - Date.now()) / 60_000)
+        auditLog('auth.lockout.active', { remainingMin, ip: req.ip })
+        res.status(429).json({ error: `Account locked. Try again in ${remainingMin} minutes.` })
+        return
+      }
+
       const { password } = req.body as { password?: string };
       if (!password || typeof password !== 'string') {
         res.status(400).json({ error: 'Invalid password' });
@@ -327,10 +341,17 @@ function mountAuthRoutes(
 
       const row = statements.getPassword.get();
       if (!row || !verifyPassword(password, row.hash)) {
+        consecutivePasswordFailures++
+        auditLog('auth.login.failed', { method: 'password', ip: req.ip, failures: consecutivePasswordFailures })
+        if (consecutivePasswordFailures >= MAX_CONSECUTIVE_FAILURES) {
+          lockoutUntil = Date.now() + LOCKOUT_DURATION_MS
+          auditLog('auth.lockout.triggered', { ip: req.ip })
+        }
         res.status(401).json({ error: 'Invalid password' });
-        auditLog('auth.login.failed', { method: 'password', ip: req.ip })
         return;
       }
+
+      consecutivePasswordFailures = 0
 
       const { token: jwt, jti } = await createSessionJWT(
         { authMethod: 'password' },
