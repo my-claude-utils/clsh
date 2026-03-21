@@ -41,12 +41,12 @@
     "prepare": "cp scripts/pre-commit .git/hooks/pre-commit 2>/dev/null || true"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
-    "eslint": "^9.0.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.1.0",
     "prettier": "^3.3.0",
-    "turbo": "^2.3.0",
+    "turbo": "^2.8.20",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.57.1"
   },
   "engines": {
     "node": ">=20.0.0"
