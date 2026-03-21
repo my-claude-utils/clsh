@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
-import { verifyJWT } from './auth.js';
+import { verifySession } from './auth.js';
+import type { DbStatements } from './db.js';
 import { PTYManager, type PTYSession } from './pty-manager.js';
 import type { ClientMessage, ServerMessage, ShellType } from './types.js';
 
@@ -9,7 +10,10 @@ const WS_CLOSE_UNAUTHORIZED = 4001;
 const WS_CLOSE_NORMAL = 1000;
 
 /** Timeout for initial auth message (5 seconds). */
-const AUTH_TIMEOUT_MS = 5_000;
+const AUTH_TIMEOUT_MS = 5_000
+
+/** Maximum stdin data size in bytes (Finding #6). */
+const MAX_STDIN_SIZE = 4096
 
 /** Subscriptions map: which sessions each WebSocket client is subscribed to. */
 type SubscriptionMap = Map<WebSocket, Set<string>>;
@@ -49,11 +53,12 @@ export function setupWebSocketHandler(
   wss: WebSocketServer,
   ptyManager: PTYManager,
   jwtSecret: string,
+  statements: DbStatements,
 ): void {
   const subscriptions: SubscriptionMap = new Map();
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    void handleConnection(ws, req, ptyManager, jwtSecret, subscriptions);
+    void handleConnection(ws, req, ptyManager, jwtSecret, statements, subscriptions);
   });
 }
 
@@ -62,6 +67,7 @@ async function handleConnection(
   _req: IncomingMessage,
   ptyManager: PTYManager,
   jwtSecret: string,
+  statements: DbStatements,
   subscriptions: SubscriptionMap,
 ): Promise<void> {
   // H5: Auth via first WS message instead of query param.
@@ -93,7 +99,7 @@ async function handleConnection(
       }
 
       try {
-        await verifyJWT(parsed.token, jwtSecret);
+        await verifySession(parsed.token, jwtSecret, statements);
       } catch {
         send(ws, { type: 'auth_error', message: 'Invalid or expired token' });
         ws.close(WS_CLOSE_UNAUTHORIZED, 'Invalid or expired token');
@@ -367,11 +373,15 @@ function handleStdin(
   data: string,
   ptyManager: PTYManager,
 ): void {
+  if (data.length > MAX_STDIN_SIZE) {
+    sendError(ws, `stdin data too large (${data.length} bytes, max ${MAX_STDIN_SIZE})`)
+    return
+  }
   try {
-    ptyManager.write(sessionId, data);
+    ptyManager.write(sessionId, data)
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Write failed';
-    sendError(ws, errMsg);
+    const errMsg = err instanceof Error ? err.message : 'Write failed'
+    sendError(ws, errMsg)
   }
 }
 
