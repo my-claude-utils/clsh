@@ -20,13 +20,49 @@ const IDLE_CHECK_INTERVAL = 2_000;
 /** Time in ms after last activity before a session is considered idle. */
 const IDLE_THRESHOLD = 2_500;
 
-/** Environment variables that must never leak into PTY child processes. */
-const SENSITIVE_ENV_VARS: ReadonlyArray<string> = [
-  'NGROK_AUTHTOKEN',
-  'RESEND_API_KEY',
-  'JWT_SECRET',
-  'CLAUDECODE',
-];
+/** Environment variable names allowed to pass into PTY child processes. */
+const ALLOWED_ENV_VARS = new Set([
+  // Core POSIX
+  'PATH',
+  'HOME',
+  'SHELL',
+  'TERM',
+  'TERM_PROGRAM',
+  'USER',
+  'LOGNAME',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'COLORTERM',
+  'EDITOR',
+  'VISUAL',
+  'DISPLAY',
+  'WAYLAND_DISPLAY',
+  'SSH_AUTH_SOCK',
+  'TMPDIR',
+  'TZ',
+  // Node.js / npm / nvm (needed for dev tools inside PTY)
+  'NODE_PATH',
+  'NODE_ENV',
+  'NVM_DIR',
+  'NVM_BIN',
+  'NVM_INC',
+  'NVM_CD_FLAGS',
+  // Git (needed for git operations inside PTY)
+  'GIT_AUTHOR_NAME',
+  'GIT_AUTHOR_EMAIL',
+  'GIT_COMMITTER_NAME',
+  'GIT_COMMITTER_EMAIL',
+  'GIT_SSH_COMMAND',
+  'GIT_EDITOR',
+  // Claude Code (the primary use case for this tool)
+  'ANTHROPIC_API_KEY',
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+])
+
+/** Prefixes allowed for env vars (e.g., XDG_*, NPM_CONFIG_*). */
+const ALLOWED_ENV_PREFIXES = ['XDG_', 'NPM_CONFIG_']
 
 /** Maps shell types to their executable and arguments. */
 const SHELL_MAP: Record<ShellType, [string, string[]]> = {
@@ -88,21 +124,28 @@ function parseOSC7(data: string): string | null {
 
 /**
  * Builds a sanitized environment for PTY child processes.
- * Strips sensitive variables and injects terminal-friendly defaults.
+ * Uses an ALLOWLIST — only explicitly permitted variables pass through.
+ * This prevents leaking secrets like API keys, tokens, and database URLs.
  */
-function buildSafeEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
+export function buildSafeEnv(): Record<string, string> {
+  const env: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !SENSITIVE_ENV_VARS.includes(key)) {
-      env[key] = value;
+    if (value === undefined) continue
+    if (ALLOWED_ENV_VARS.has(key)) {
+      env[key] = value
+      continue
+    }
+    if (ALLOWED_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      env[key] = value
     }
   }
 
-  env['FORCE_COLOR'] = '1';
-  env['TERM'] = 'xterm-256color';
+  // Terminal-friendly defaults
+  env['FORCE_COLOR'] = '1'
+  env['TERM'] = 'xterm-256color'
 
-  return env;
+  return env
 }
 
 export class PTYManager {
