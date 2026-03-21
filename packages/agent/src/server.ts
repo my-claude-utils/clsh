@@ -12,6 +12,7 @@ import {
   verifyBootstrapToken,
   createSessionJWT,
   verifyJWT,
+  verifySession,
   hashToken,
 } from './auth.js';
 import type { DbStatements } from './db.js';
@@ -238,10 +239,11 @@ function mountAuthRoutes(
       // Consume the token immediately — one-time use only
       statements.deleteBootstrapToken.run(hashToken(token));
 
-      const jwt = await createSessionJWT(
+      const { token: jwt, jti } = await createSessionJWT(
         { authMethod: 'bootstrap' },
         config.jwtSecret,
       );
+      statements.insertSession.run(jti, jti, '');
 
       res.json({ token: jwt });
     } catch (err) {
@@ -261,18 +263,13 @@ function mountAuthRoutes(
     message: { error: 'Too many attempts, please try again later' },
   });
 
-  // GET /api/auth/password/status — check if password and/or biometric are configured.
-  // Returns credentialId + userId so PWA can attempt WebAuthn without a JWT.
+  // GET /api/auth/password/status — check if password is configured.
   app.get('/api/auth/password/status', (_req, res) => {
-    const passwordRow = statements.getPassword.get();
-    const biometricRow = statements.getBiometric.get();
+    const passwordRow = statements.getPassword.get()
     res.json({
       configured: !!passwordRow,
-      biometricConfigured: !!biometricRow,
-      credentialId: biometricRow?.credential_id ?? null,
-      userId: biometricRow?.user_id ?? null,
-    });
-  });
+    })
+  })
 
   // POST /api/auth/password/setup — set or update the server-side password (authenticated)
   app.post('/api/auth/password/setup', authLimiter, async (req, res) => {
@@ -285,7 +282,7 @@ function mountAuthRoutes(
       }
 
       try {
-        await verifyJWT(authHeader.slice(7), config.jwtSecret);
+        await verifySession(authHeader.slice(7), config.jwtSecret, statements);
       } catch {
         res.status(401).json({ error: 'Invalid or expired token' });
         return;
@@ -327,10 +324,11 @@ function mountAuthRoutes(
         return;
       }
 
-      const jwt = await createSessionJWT(
+      const { token: jwt, jti } = await createSessionJWT(
         { authMethod: 'password' },
         config.jwtSecret,
       );
+      statements.insertSession.run(jti, jti, '');
 
       res.json({ token: jwt });
     } catch (err) {
@@ -339,65 +337,7 @@ function mountAuthRoutes(
     }
   });
 
-  // POST /api/auth/biometric — authenticate via Face ID (unauthenticated).
-  // The client does WebAuthn locally; if it succeeds and credentialId matches
-  // the stored one, we issue a JWT. Rate-limited like password login.
-  app.post('/api/auth/biometric', passwordLimiter, async (req, res) => {
-    try {
-      const { credentialId } = req.body as { credentialId?: string };
-      if (!credentialId || typeof credentialId !== 'string') {
-        res.status(400).json({ error: 'Authentication failed' });
-        return;
-      }
-
-      const row = statements.getBiometric.get();
-      if (!row || row.credential_id !== credentialId) {
-        res.status(401).json({ error: 'Authentication failed' });
-        return;
-      }
-
-      const jwt = await createSessionJWT(
-        { authMethod: 'biometric' },
-        config.jwtSecret,
-      );
-
-      res.json({ token: jwt });
-    } catch (err) {
-      console.error('Biometric auth error:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-
-  // ── Lock state (biometric credential storage + restoration) ──
-
-  // POST /api/auth/lock/biometric — store biometric credential ID server-side (authenticated)
-  app.post('/api/auth/lock/biometric', authLimiter, async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Authorization required' });
-        return;
-      }
-      try {
-        await verifyJWT(authHeader.slice(7), config.jwtSecret);
-      } catch {
-        res.status(401).json({ error: 'Invalid or expired token' });
-        return;
-      }
-
-      const { credentialId, userId } = req.body as { credentialId?: string; userId?: string };
-      if (!credentialId || !userId || typeof credentialId !== 'string' || typeof userId !== 'string') {
-        res.status(400).json({ error: 'Missing credentialId or userId' });
-        return;
-      }
-
-      statements.upsertBiometric.run(credentialId, userId);
-      res.json({ ok: true });
-    } catch (err) {
-      console.error('Biometric setup error:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
+  // ── Lock state (client hash storage + restoration) ──
 
   // POST /api/auth/lock/client-hash — sync client-side password hash to server (authenticated)
   app.post('/api/auth/lock/client-hash', authLimiter, async (req, res) => {
@@ -408,7 +348,7 @@ function mountAuthRoutes(
         return;
       }
       try {
-        await verifyJWT(authHeader.slice(7), config.jwtSecret);
+        await verifySession(authHeader.slice(7), config.jwtSecret, statements);
       } catch {
         res.status(401).json({ error: 'Invalid or expired token' });
         return;
@@ -437,25 +377,44 @@ function mountAuthRoutes(
         return;
       }
       try {
-        await verifyJWT(authHeader.slice(7), config.jwtSecret);
+        await verifySession(authHeader.slice(7), config.jwtSecret, statements);
       } catch {
         res.status(401).json({ error: 'Invalid or expired token' });
         return;
       }
 
-      const biometricRow = statements.getBiometric.get();
-      const passwordRow = statements.getPassword.get();
-      const clientHashRow = statements.getClientHash.get();
+      const passwordRow = statements.getPassword.get()
+      const clientHashRow = statements.getClientHash.get()
 
       res.json({
         passwordConfigured: !!passwordRow,
-        biometricConfigured: !!biometricRow,
-        credentialId: biometricRow?.credential_id ?? null,
-        userId: biometricRow?.user_id ?? null,
         clientPwdHash: clientHashRow?.hash ?? null,
-      });
+      })
     } catch (err) {
       console.error('Lock state error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/auth/logout — revoke the current session
+  app.delete('/api/auth/logout', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Authorization required' });
+        return;
+      }
+      try {
+        const { payload } = await verifyJWT(authHeader.slice(7), config.jwtSecret);
+        if (payload.jti) {
+          statements.deleteSession.run(payload.jti);
+        }
+      } catch {
+        // Token invalid — already effectively logged out
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('Logout error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
