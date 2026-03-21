@@ -297,7 +297,7 @@ function mountAuthRoutes(
         return;
       }
 
-      const { password, clientHash } = req.body as { password?: string; clientHash?: string };
+      const { password } = req.body as { password?: string };
       if (!password || typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
         res.status(400).json({ error: `Password must be at least ${String(MIN_PASSWORD_LENGTH)} characters` });
         return;
@@ -305,11 +305,6 @@ function mountAuthRoutes(
 
       const hash = hashPassword(password);
       statements.upsertPassword.run(hash);
-
-      // Store the client-side SHA-256 hash for PWA lock state restoration
-      if (clientHash && typeof clientHash === 'string') {
-        statements.upsertClientHash.run(clientHash);
-      }
 
       res.json({ ok: true });
     } catch (err) {
