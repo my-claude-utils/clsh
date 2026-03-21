@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync } from 'node:child_process'
 
 /**
  * Checks if macOS is configured to keep network alive when the lid closes.
@@ -8,23 +8,23 @@ import { execSync } from 'node:child_process';
  * ngrok tunnel) alive during display sleep / lid close.
  */
 export function checkNetworkPersistence(): void {
-  if (process.platform !== 'darwin') return;
+  if (process.platform !== 'darwin') return
 
   try {
-    const output = execSync('pmset -g', { encoding: 'utf-8' });
-    const tcpMatch = /tcpkeepalive\s+(\d+)/.exec(output);
+    const output = execSync('pmset -g', { encoding: 'utf-8' })
+    const tcpMatch = /tcpkeepalive\s+(\d+)/.exec(output)
     if (tcpMatch?.[1] === '1') {
-      return; // Already configured, stay silent
+      return // Already configured, stay silent
     }
   } catch {
-    return; // Can't read pmset, skip silently
+    return // Can't read pmset, skip silently
   }
 
   // ANSI colors matching the clsh startup style
-  const o = '\x1b[38;5;208m'; // orange
-  const dim = '\x1b[2m';
-  const r = '\x1b[0m';
+  const o = '\x1b[38;5;208m' // orange
+  const dim = '\x1b[2m'
+  const r = '\x1b[0m'
 
-  console.log(`${o}  Tip:${r} Wi-Fi may drop when you close the lid.`);
-  console.log(`${dim}  Run once to fix:${r} sudo pmset -c tcpkeepalive 1`);
+  console.log(`${o}  Tip:${r} Wi-Fi may drop when you close the lid.`)
+  console.log(`${dim}  Run once to fix:${r} sudo pmset -c tcpkeepalive 1`)
 }

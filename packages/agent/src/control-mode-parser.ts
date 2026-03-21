@@ -20,7 +20,7 @@ export type ControlModeEvent =
   | { type: 'begin'; timestamp: number; cmdNumber: number }
   | { type: 'end'; timestamp: number; cmdNumber: number }
   | { type: 'error'; timestamp: number; cmdNumber: number }
-  | { type: 'exit' };
+  | { type: 'exit' }
 
 /**
  * Decodes tmux octal-encoded string.
@@ -30,7 +30,7 @@ export type ControlModeEvent =
 export function decodeTmuxOctal(encoded: string): string {
   return encoded.replace(/\\(\d{3})/g, (_match: string, oct: string) =>
     String.fromCharCode(parseInt(oct, 8)),
-  );
+  )
 }
 
 /**
@@ -38,11 +38,11 @@ export function decodeTmuxOctal(encoded: string): string {
  * Each character becomes a 2-digit hex value separated by spaces.
  */
 export function encodeInputAsHex(data: string): string {
-  const parts: string[] = [];
+  const parts: string[] = []
   for (let i = 0; i < data.length; i++) {
-    parts.push(data.charCodeAt(i).toString(16).padStart(2, '0'));
+    parts.push(data.charCodeAt(i).toString(16).padStart(2, '0'))
   }
-  return parts.join(' ');
+  return parts.join(' ')
 }
 
 /**
@@ -50,58 +50,58 @@ export function encodeInputAsHex(data: string): string {
  * Returns null for non-event lines (DCS sequences, empty lines, etc).
  */
 export function parseControlLine(line: string): ControlModeEvent | null {
-  if (!line.startsWith('%')) return null;
+  if (!line.startsWith('%')) return null
 
   if (line.startsWith('%output ')) {
     // Format: %output %<paneId> <octal-encoded data>
-    const rest = line.substring(8);
-    const spaceIdx = rest.indexOf(' ');
-    if (spaceIdx === -1) return null;
-    const paneId = rest.substring(0, spaceIdx);
-    const data = decodeTmuxOctal(rest.substring(spaceIdx + 1));
-    return { type: 'output', paneId, data };
+    const rest = line.substring(8)
+    const spaceIdx = rest.indexOf(' ')
+    if (spaceIdx === -1) return null
+    const paneId = rest.substring(0, spaceIdx)
+    const data = decodeTmuxOctal(rest.substring(spaceIdx + 1))
+    return { type: 'output', paneId, data }
   }
 
   if (line.startsWith('%begin ')) {
-    const parts = line.split(' ');
-    return { type: 'begin', timestamp: parseInt(parts[1], 10), cmdNumber: parseInt(parts[2], 10) };
+    const parts = line.split(' ')
+    return { type: 'begin', timestamp: parseInt(parts[1], 10), cmdNumber: parseInt(parts[2], 10) }
   }
 
   if (line.startsWith('%end ')) {
-    const parts = line.split(' ');
-    return { type: 'end', timestamp: parseInt(parts[1], 10), cmdNumber: parseInt(parts[2], 10) };
+    const parts = line.split(' ')
+    return { type: 'end', timestamp: parseInt(parts[1], 10), cmdNumber: parseInt(parts[2], 10) }
   }
 
   if (line.startsWith('%error ')) {
-    const parts = line.split(' ');
-    return { type: 'error', timestamp: parseInt(parts[1], 10), cmdNumber: parseInt(parts[2], 10) };
+    const parts = line.split(' ')
+    return { type: 'error', timestamp: parseInt(parts[1], 10), cmdNumber: parseInt(parts[2], 10) }
   }
 
   if (line === '%exit') {
-    return { type: 'exit' };
+    return { type: 'exit' }
   }
 
   // Other notifications (%session-changed, %window-add, etc) — ignore
-  return null;
+  return null
 }
 
 /** Max input bytes per send-keys -H command to avoid overly long commands. */
-const MAX_HEX_CHUNK = 512;
+const MAX_HEX_CHUNK = 512
 
 /**
  * Builds tmux send-keys -H commands for forwarding user input.
  * Chunks large inputs to keep command length reasonable.
  */
 export function buildSendKeysCommands(tmuxName: string, data: string): string[] {
-  const commands: string[] = [];
+  const commands: string[] = []
 
   for (let offset = 0; offset < data.length; offset += MAX_HEX_CHUNK) {
-    const chunk = data.substring(offset, offset + MAX_HEX_CHUNK);
-    const hex = encodeInputAsHex(chunk);
-    commands.push(`send-keys -t ${tmuxName} -H ${hex}`);
+    const chunk = data.substring(offset, offset + MAX_HEX_CHUNK)
+    const hex = encodeInputAsHex(chunk)
+    commands.push(`send-keys -t ${tmuxName} -H ${hex}`)
   }
 
-  return commands;
+  return commands
 }
 
 /**
@@ -109,27 +109,27 @@ export function buildSendKeysCommands(tmuxName: string, data: string): string[] 
  * Accumulates raw pty.onData() chunks into complete lines, then parses each.
  */
 export class ControlModeLineBuffer {
-  private buffer = '';
-  private callback: (event: ControlModeEvent) => void;
+  private buffer = ''
+  private callback: (event: ControlModeEvent) => void
 
   constructor(callback: (event: ControlModeEvent) => void) {
-    this.callback = callback;
+    this.callback = callback
   }
 
   /** Feed raw data from pty.onData(). Parses complete lines and emits events. */
   feed(data: string): void {
-    this.buffer += data;
+    this.buffer += data
 
-    let newlineIdx: number;
+    let newlineIdx: number
     while ((newlineIdx = this.buffer.indexOf('\n')) !== -1) {
-      const line = this.buffer.substring(0, newlineIdx).replace(/\r$/, '');
-      this.buffer = this.buffer.substring(newlineIdx + 1);
+      const line = this.buffer.substring(0, newlineIdx).replace(/\r$/, '')
+      this.buffer = this.buffer.substring(newlineIdx + 1)
 
-      if (line === '') continue;
+      if (line === '') continue
 
-      const event = parseControlLine(line);
+      const event = parseControlLine(line)
       if (event) {
-        this.callback(event);
+        this.callback(event)
       }
     }
   }

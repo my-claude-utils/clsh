@@ -1,39 +1,41 @@
-import { randomBytes } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { join, resolve } from 'node:path';
-import { homedir } from 'node:os';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import type { DefaultableShell } from './types.js';
+import { randomBytes } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import type { DefaultableShell } from './types.js'
 
 export interface AgentConfig {
-  port: number;
+  port: number
   /** Port that the ngrok tunnel should forward to.
    *  In dev, set WEB_PORT=4031 so the tunnel hits the Vite dev server
    *  (which proxies /api and /ws to the agent). In production this
    *  defaults to `port` because the agent serves the built web UI. */
-  webPort: number;
-  jwtSecret: string;
-  ngrokAuthtoken: string | undefined;
+  webPort: number
+  jwtSecret: string
+  ngrokAuthtoken: string | undefined
   /** Optional static ngrok domain (e.g. "my-name.ngrok-free.app").
    *  Free ngrok accounts get one static domain — set NGROK_STATIC_DOMAIN
    *  in .env to keep the same URL across restarts. */
-  ngrokStaticDomain: string | undefined;
+  ngrokStaticDomain: string | undefined
   /** Force a specific tunnel method: 'ngrok', 'ssh', or 'local'.
    *  If unset, auto-detects (ngrok → ssh → local). Set TUNNEL=ssh to skip ngrok. */
-  tunnelMethod: 'ngrok' | 'ssh' | 'local' | undefined;
-  resendApiKey: string | undefined;
-  dbPath: string;
+  tunnelMethod: 'ngrok' | 'ssh' | 'local' | undefined
+  resendApiKey: string | undefined
+  dbPath: string
   /** Set CLSH_NO_TMUX=1 to disable tmux session persistence even when tmux is available. */
-  tmuxDisabled: boolean;
+  tmuxDisabled: boolean
+  /** Set CLSH_NO_LOCAL_FALLBACK=1 to refuse falling back to plaintext HTTP when all tunnels fail. */
+  noLocalFallback: boolean
   /** Resolved default shell for new terminal sessions.
    *  Set CLSH_SHELL=bash|zsh to override; otherwise auto-detected at startup. */
-  defaultShell: DefaultableShell;
+  defaultShell: DefaultableShell
 }
 
 interface ClshConfigFile {
-  ngrokAuthtoken?: string;
-  ngrokStaticDomain?: string;
-  port?: number;
+  ngrokAuthtoken?: string
+  ngrokStaticDomain?: string
+  port?: number
 }
 
 /**
@@ -52,22 +54,22 @@ interface ClshConfigFile {
  */
 function parseDotEnvContent(content: string): void {
   for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
 
-    const eqIdx = trimmed.indexOf('=');
-    if (eqIdx < 0) continue;
+    const eqIdx = trimmed.indexOf('=')
+    if (eqIdx < 0) continue
 
-    const key = trimmed.slice(0, eqIdx).trim();
-    if (!key) continue;
+    const key = trimmed.slice(0, eqIdx).trim()
+    if (!key) continue
 
     // Strip optional surrounding quotes from the value
-    const raw = trimmed.slice(eqIdx + 1).trim();
-    const value = raw.replace(/^(['"])(.*)\1$/, '$2');
+    const raw = trimmed.slice(eqIdx + 1).trim()
+    const value = raw.replace(/^(['"])(.*)\1$/, '$2')
 
     // Don't override values that are already set in the environment
     if (!(key in process.env)) {
-      process.env[key] = value;
+      process.env[key] = value
     }
   }
 }
@@ -79,13 +81,13 @@ function loadDotEnv(): void {
   const candidates = [
     resolve(import.meta.dirname, '..', '..', '..', '.env'),
     resolve(process.cwd(), '.env'),
-  ];
+  ]
 
   for (const envPath of candidates) {
     try {
-      const content = readFileSync(envPath, 'utf-8');
-      parseDotEnvContent(content);
-      return; // Use the first .env we find
+      const content = readFileSync(envPath, 'utf-8')
+      parseDotEnvContent(content)
+      return // Use the first .env we find
     } catch {
       // Not found at this path, try next
     }
@@ -99,16 +101,16 @@ function loadDotEnv(): void {
  */
 function loadConfigFile(): ClshConfigFile {
   try {
-    const configPath = join(homedir(), '.clsh', 'config.json');
-    const content = readFileSync(configPath, 'utf-8');
-    return JSON.parse(content) as ClshConfigFile;
+    const configPath = join(homedir(), '.clsh', 'config.json')
+    const content = readFileSync(configPath, 'utf-8')
+    return JSON.parse(content) as ClshConfigFile
   } catch {
-    return {};
+    return {}
   }
 }
 
 function getEnv(key: string): string | undefined {
-  return process.env[key];
+  return process.env[key]
 }
 
 /**
@@ -118,33 +120,37 @@ function getEnv(key: string): string | undefined {
  * Override with JWT_SECRET env var if needed.
  */
 function getOrCreateJwtSecret(clshDir: string): string {
-  const secretPath = join(clshDir, 'jwt_secret');
+  const secretPath = join(clshDir, 'jwt_secret')
   if (existsSync(secretPath)) {
     try {
-      const stored = readFileSync(secretPath, 'utf-8').trim();
-      if (stored.length > 10) return stored;
-    } catch { /* fall through */ }
+      const stored = readFileSync(secretPath, 'utf-8').trim()
+      if (stored.length > 10) return stored
+    } catch {
+      /* fall through */
+    }
   }
-  const secret = randomBytes(32).toString('base64url');
+  const secret = randomBytes(32).toString('base64url')
   try {
-    mkdirSync(clshDir, { recursive: true });
-    writeFileSync(secretPath, secret, { mode: 0o600 }); // owner-readable only
-  } catch { /* ignore write errors */ }
-  return secret;
+    mkdirSync(clshDir, { recursive: true })
+    writeFileSync(secretPath, secret, { mode: 0o600 }) // owner-readable only
+  } catch {
+    /* ignore write errors */
+  }
+  return secret
 }
 
-const DEFAULTABLE_SHELLS: ReadonlyArray<DefaultableShell> = ['zsh', 'bash'];
+const DEFAULTABLE_SHELLS: ReadonlyArray<DefaultableShell> = ['zsh', 'bash']
 
 function isDefaultableShell(value: string): value is DefaultableShell {
-  return DEFAULTABLE_SHELLS.includes(value as DefaultableShell);
+  return DEFAULTABLE_SHELLS.includes(value as DefaultableShell)
 }
 
 function shellExists(shell: string): boolean {
   try {
-    execFileSync('sh', ['-c', 'command -v -- "$1"', '--', shell], { stdio: 'ignore' });
-    return true;
+    execFileSync('sh', ['-c', 'command -v -- "$1"', '--', shell], { stdio: 'ignore' })
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -154,42 +160,43 @@ function shellExists(shell: string): boolean {
  * Returns the shell and the source for startup logging.
  */
 function detectDefaultShell(): { shell: DefaultableShell; source: string } {
-  const override = getEnv('CLSH_SHELL');
+  const override = getEnv('CLSH_SHELL')
   if (override) {
     if (!isDefaultableShell(override)) {
       throw new Error(
         `Invalid CLSH_SHELL value: "${override}". Valid options: ${DEFAULTABLE_SHELLS.join(', ')}`,
-      );
+      )
     }
     if (!shellExists(override)) {
       throw new Error(
         `CLSH_SHELL is set to "${override}" but it is not installed. Install it or choose another shell.`,
-      );
+      )
     }
-    return { shell: override, source: 'CLSH_SHELL' };
+    return { shell: override, source: 'CLSH_SHELL' }
   }
 
   for (const candidate of DEFAULTABLE_SHELLS) {
     if (shellExists(candidate)) {
-      return { shell: candidate, source: 'auto-detected' };
+      return { shell: candidate, source: 'auto-detected' }
     }
   }
 
-  throw new Error(
-    `No supported shell found. Install one of: ${DEFAULTABLE_SHELLS.join(', ')}`,
-  );
+  throw new Error(`No supported shell found. Install one of: ${DEFAULTABLE_SHELLS.join(', ')}`)
 }
 
 export function loadConfig(): AgentConfig {
   // Priority: env vars > .env > ~/.clsh/config.json > defaults
-  loadDotEnv();
-  const fileConfig = loadConfigFile();
+  loadDotEnv()
+  const fileConfig = loadConfigFile()
 
-  const clshDir = join(homedir(), '.clsh');
-  const defaultDbPath = join(clshDir, 'clsh.db');
-  const port = parseInt(getEnv('PORT') ?? (fileConfig.port != null ? String(fileConfig.port) : '4030'), 10);
-  const { shell: defaultShell, source: shellSource } = detectDefaultShell();
-  console.log(`  Default shell: ${defaultShell} (${shellSource})`);
+  const clshDir = join(homedir(), '.clsh')
+  const defaultDbPath = join(clshDir, 'clsh.db')
+  const port = parseInt(
+    getEnv('PORT') ?? (fileConfig.port != null ? String(fileConfig.port) : '4030'),
+    10,
+  )
+  const { shell: defaultShell, source: shellSource } = detectDefaultShell()
+  console.log(`  Default shell: ${defaultShell} (${shellSource})`)
 
   return {
     port,
@@ -201,6 +208,7 @@ export function loadConfig(): AgentConfig {
     resendApiKey: getEnv('RESEND_API_KEY'),
     dbPath: getEnv('DB_PATH') ?? defaultDbPath,
     tmuxDisabled: getEnv('CLSH_NO_TMUX') === '1',
+    noLocalFallback: getEnv('CLSH_NO_LOCAL_FALLBACK') === '1',
     defaultShell,
-  };
+  }
 }

@@ -1,8 +1,8 @@
 /** Shell types supported by the PTY manager. */
-export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude';
+export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude'
 
 /** Shell types that can be used as the server default (excludes tmux/claude). */
-export type DefaultableShell = 'bash' | 'zsh';
+export type DefaultableShell = 'bash' | 'zsh'
 
 /** Messages sent from client to server over WebSocket. */
 export type ClientMessage =
@@ -14,7 +14,7 @@ export type ClientMessage =
   | { type: 'session_rename'; sessionId: string; name: string }
   | { type: 'session_subscribe'; sessionId: string }
   | { type: 'session_list' }
-  | { type: 'ping' };
+  | { type: 'ping' }
 
 /** Messages sent from server to client over WebSocket. */
 export type ServerMessage =
@@ -23,11 +23,26 @@ export type ServerMessage =
   | { type: 'stdout'; sessionId: string; data: string }
   | { type: 'stderr'; sessionId: string; data: string }
   | { type: 'exit'; sessionId: string; exitCode: number; signal?: number }
-  | { type: 'session'; sessionId: string; shell: string; pid: number; name: string; cwd: string; status: 'run' | 'idle' }
   | {
-      type: 'session_list';
-      sessions: Array<{ id: string; shell: string; pid: number; name: string; cwd: string; status: 'run' | 'idle' }>;
+      type: 'session'
+      sessionId: string
+      shell: string
+      pid: number
+      name: string
+      cwd: string
+      status: 'run' | 'idle'
+    }
+  | {
+      type: 'session_list'
+      sessions: Array<{
+        id: string
+        shell: string
+        pid: number
+        name: string
+        cwd: string
+        status: 'run' | 'idle'
+      }>
     }
   | { type: 'session_update'; sessionId: string; name: string; cwd: string; status: 'run' | 'idle' }
   | { type: 'error'; message: string }
-  | { type: 'pong' };
+  | { type: 'pong' }

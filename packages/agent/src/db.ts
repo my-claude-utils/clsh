@@ -1,56 +1,49 @@
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import Database from 'better-sqlite3'
+import { mkdirSync, chmodSync } from 'node:fs'
+import { dirname } from 'node:path'
 
 export interface PtySessionRow {
-  id: string;
-  tmux_name: string;
-  shell: string;
-  name: string;
-  cwd: string;
-  created_at: string;
+  id: string
+  tmux_name: string
+  shell: string
+  name: string
+  cwd: string
+  created_at: string
 }
 
 export interface PasswordRow {
-  id: number;
-  hash: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface BiometricRow {
-  id: number;
-  credential_id: string;
-  user_id: string;
-  created_at: string;
+  id: number
+  hash: string
+  created_at: string
+  updated_at: string
 }
 
 export interface DbStatements {
-  insertBootstrapToken: Database.Statement<[string, string]>;
-  getBootstrapToken: Database.Statement<[string], { id: string; hash: string; created_at: string }>;
-  deleteBootstrapToken: Database.Statement<[string]>;
-  insertSession: Database.Statement<[string, string, string]>;
-  updateSessionLastSeen: Database.Statement<[string]>;
-  getSession: Database.Statement<[string], { id: string; jwt_id: string; email: string; created_at: string; last_seen: string }>;
-  insertPtySession: Database.Statement<[string, string, string, string, string]>;
-  getPtySession: Database.Statement<[string], PtySessionRow>;
-  listPtySessions: Database.Statement<[], PtySessionRow>;
-  updatePtySession: Database.Statement<[string, string, string]>;
-  deletePtySession: Database.Statement<[string]>;
-  deleteAllPtySessions: Database.Statement<[]>;
-  getPassword: Database.Statement<[], PasswordRow>;
-  upsertPassword: Database.Statement<[string]>;
-  deletePassword: Database.Statement<[]>;
-  getBiometric: Database.Statement<[], BiometricRow>;
-  upsertBiometric: Database.Statement<[string, string]>;
-  deleteBiometric: Database.Statement<[]>;
-  getClientHash: Database.Statement<[], { id: number; hash: string }>;
-  upsertClientHash: Database.Statement<[string]>;
+  insertBootstrapToken: Database.Statement<[string, string]>
+  getBootstrapToken: Database.Statement<[string], { id: string; hash: string; created_at: string }>
+  deleteBootstrapToken: Database.Statement<[string]>
+  deleteAllBootstrapTokens: Database.Statement<[]>
+  insertSession: Database.Statement<[string, string, string]>
+  updateSessionLastSeen: Database.Statement<[string]>
+  getSession: Database.Statement<
+    [string],
+    { id: string; jwt_id: string; email: string; created_at: string; last_seen: string }
+  >
+  deleteSession: Database.Statement<[string]>
+  insertPtySession: Database.Statement<[string, string, string, string, string]>
+  getPtySession: Database.Statement<[string], PtySessionRow>
+  listPtySessions: Database.Statement<[], PtySessionRow>
+  updatePtySession: Database.Statement<[string, string, string]>
+  deletePtySession: Database.Statement<[string]>
+  deleteAllPtySessions: Database.Statement<[]>
+  getPassword: Database.Statement<[], PasswordRow>
+  upsertPassword: Database.Statement<[string]>
+  deletePassword: Database.Statement<[]>
 }
 
 export interface DbContext {
-  db: Database.Database;
-  statements: DbStatements;
+  db: Database.Database
+  statements: DbStatements
 }
 
 /**
@@ -60,13 +53,21 @@ export interface DbContext {
  */
 export function initDatabase(dbPath: string): DbContext {
   // Ensure the directory exists
-  mkdirSync(dirname(dbPath), { recursive: true });
+  mkdirSync(dirname(dbPath), { recursive: true })
 
-  const db = new Database(dbPath);
+  const db = new Database(dbPath)
+
+  // Restrict DB file permissions — contains password hashes and session data (Finding #10)
+  try {
+    chmodSync(dbPath, 0o600)
+    chmodSync(dirname(dbPath), 0o700)
+  } catch {
+    // chmodSync may fail on Windows/NTFS — non-critical on non-POSIX
+  }
 
   // Enable WAL mode for better concurrent read performance
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
 
   // Create schema
   db.exec(`
@@ -105,39 +106,24 @@ export function initDatabase(dbPath: string): DbContext {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS lock_biometric (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      credential_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS lock_client_hash (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      hash TEXT NOT NULL
-    );
-  `);
+  `)
 
   // Prepare statements for repeated use
   const statements: DbStatements = {
-    insertBootstrapToken: db.prepare(
-      'INSERT INTO bootstrap_tokens (id, hash) VALUES (?, ?)',
-    ),
+    insertBootstrapToken: db.prepare('INSERT INTO bootstrap_tokens (id, hash) VALUES (?, ?)'),
     getBootstrapToken: db.prepare(
       'SELECT id, hash, created_at FROM bootstrap_tokens WHERE hash = ?',
     ),
-    deleteBootstrapToken: db.prepare(
-      'DELETE FROM bootstrap_tokens WHERE hash = ?',
-    ),
-    insertSession: db.prepare(
-      'INSERT INTO sessions (id, jwt_id, email) VALUES (?, ?, ?)',
-    ),
+    deleteBootstrapToken: db.prepare('DELETE FROM bootstrap_tokens WHERE hash = ?'),
+    deleteAllBootstrapTokens: db.prepare('DELETE FROM bootstrap_tokens'),
+    insertSession: db.prepare('INSERT INTO sessions (id, jwt_id, email) VALUES (?, ?, ?)'),
     updateSessionLastSeen: db.prepare(
       "UPDATE sessions SET last_seen = datetime('now') WHERE id = ?",
     ),
     getSession: db.prepare(
       'SELECT id, jwt_id, email, created_at, last_seen FROM sessions WHERE id = ?',
     ),
+    deleteSession: db.prepare('DELETE FROM sessions WHERE id = ?'),
     insertPtySession: db.prepare(
       'INSERT INTO pty_sessions (id, tmux_name, shell, name, cwd) VALUES (?, ?, ?, ?, ?)',
     ),
@@ -147,15 +133,9 @@ export function initDatabase(dbPath: string): DbContext {
     listPtySessions: db.prepare(
       'SELECT id, tmux_name, shell, name, cwd, created_at FROM pty_sessions',
     ),
-    updatePtySession: db.prepare(
-      'UPDATE pty_sessions SET name = ?, cwd = ? WHERE id = ?',
-    ),
-    deletePtySession: db.prepare(
-      'DELETE FROM pty_sessions WHERE id = ?',
-    ),
-    deleteAllPtySessions: db.prepare(
-      'DELETE FROM pty_sessions',
-    ),
+    updatePtySession: db.prepare('UPDATE pty_sessions SET name = ?, cwd = ? WHERE id = ?'),
+    deletePtySession: db.prepare('DELETE FROM pty_sessions WHERE id = ?'),
+    deleteAllPtySessions: db.prepare('DELETE FROM pty_sessions'),
     getPassword: db.prepare(
       'SELECT id, hash, created_at, updated_at FROM user_password WHERE id = 1',
     ),
@@ -163,27 +143,8 @@ export function initDatabase(dbPath: string): DbContext {
       `INSERT INTO user_password (id, hash) VALUES (1, ?)
        ON CONFLICT (id) DO UPDATE SET hash = excluded.hash, updated_at = datetime('now')`,
     ),
-    deletePassword: db.prepare(
-      'DELETE FROM user_password WHERE id = 1',
-    ),
-    getBiometric: db.prepare(
-      'SELECT id, credential_id, user_id, created_at FROM lock_biometric WHERE id = 1',
-    ),
-    upsertBiometric: db.prepare(
-      `INSERT INTO lock_biometric (id, credential_id, user_id) VALUES (1, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET credential_id = excluded.credential_id, user_id = excluded.user_id`,
-    ),
-    deleteBiometric: db.prepare(
-      'DELETE FROM lock_biometric WHERE id = 1',
-    ),
-    getClientHash: db.prepare(
-      'SELECT id, hash FROM lock_client_hash WHERE id = 1',
-    ),
-    upsertClientHash: db.prepare(
-      `INSERT INTO lock_client_hash (id, hash) VALUES (1, ?)
-       ON CONFLICT (id) DO UPDATE SET hash = excluded.hash`,
-    ),
-  };
+    deletePassword: db.prepare('DELETE FROM user_password WHERE id = 1'),
+  }
 
-  return { db, statements };
+  return { db, statements }
 }
