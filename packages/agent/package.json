@@ -29,7 +29,7 @@
     "build": "tsc",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"No tests yet\""
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@ngrok/ngrok": "^1.4.0",
@@ -45,6 +45,7 @@
     "@types/better-sqlite3": "^7.6.0",
     "@types/express": "^5.0.0",
     "@types/ws": "^8.5.0",
-    "tsx": "^4.19.0"
+    "tsx": "^4.19.0",
+    "vitest": "^4.1.0"
   }
 }
