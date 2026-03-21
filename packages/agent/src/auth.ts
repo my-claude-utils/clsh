@@ -48,22 +48,26 @@ export interface SessionJWTClaims {
 /**
  * Creates a signed JWT for an authenticated session.
  * Uses HS256 with an 8-hour expiry and a random JTI for uniqueness.
+ * Returns both the signed token and the JTI so the caller can record
+ * the session in the database for revocation support.
  */
 export async function createSessionJWT(
   claims: SessionJWTClaims,
   secret: string,
-): Promise<string> {
-  const secretKey = new TextEncoder().encode(secret);
-  const jti = randomUUID();
+): Promise<{ token: string; jti: string }> {
+  const secretKey = new TextEncoder().encode(secret)
+  const jti = randomUUID()
 
-  return new SignJWT({ ...claims })
+  const token = await new SignJWT({ ...claims })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('30d')
+    .setExpirationTime('8h')
     .setJti(jti)
     .setIssuer('clsh-agent')
     .setSubject(claims.email ?? 'local')
-    .sign(secretKey);
+    .sign(secretKey)
+
+  return { token, jti }
 }
 
 export interface VerifiedJWT {
@@ -78,12 +82,33 @@ export async function verifyJWT(
   token: string,
   secret: string,
 ): Promise<VerifiedJWT> {
-  const secretKey = new TextEncoder().encode(secret);
+  const secretKey = new TextEncoder().encode(secret)
 
   const { payload } = await jwtVerify(token, secretKey, {
     issuer: 'clsh-agent',
     algorithms: ['HS256'],
-  });
+  })
 
-  return { payload };
+  return { payload }
+}
+
+/**
+ * Verifies a JWT and checks that the session has not been revoked.
+ * Updates the session's last_seen timestamp on success.
+ * Throws if the token is invalid or the session was revoked (deleted from DB).
+ */
+export async function verifySession(
+  token: string,
+  secret: string,
+  statements: DbStatements,
+): Promise<VerifiedJWT> {
+  const result = await verifyJWT(token, secret)
+  const jti = result.payload.jti
+  if (!jti) throw new Error('Token missing jti')
+
+  const session = statements.getSession.get(jti)
+  if (!session) throw new Error('Session revoked')
+
+  statements.updateSessionLastSeen.run(jti)
+  return result
 }
