@@ -3,8 +3,8 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-/** Socket name for clsh's isolated tmux server (avoids conflicts with user's tmux). */
-export const TMUX_SOCKET = 'clsh';
+/** Full path to clsh's tmux socket (in ~/.clsh/ for restricted permissions). */
+export const TMUX_SOCKET_PATH = join(homedir(), '.clsh', 'tmux.sock');
 
 /** Invisible tmux config — no status bar, no prefix, passthrough for OSC 7. */
 const TMUX_CONF = `set -g status off
@@ -50,7 +50,7 @@ export function ensureTmuxConfig(): string {
  */
 export function listClshTmuxSessions(): string[] {
   try {
-    const output = execFileSync('tmux', ['-L', TMUX_SOCKET, 'list-sessions', '-F', '#{session_name}'], {
+    const output = execFileSync('tmux', ['-S', TMUX_SOCKET_PATH, 'list-sessions', '-F', '#{session_name}'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -69,7 +69,7 @@ export function listClshTmuxSessions(): string[] {
  */
 export function tmuxSessionExists(name: string): boolean {
   try {
-    execFileSync('tmux', ['-L', TMUX_SOCKET, 'has-session', '-t', name], { stdio: 'ignore' });
+    execFileSync('tmux', ['-S', TMUX_SOCKET_PATH, 'has-session', '-t', name], { stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -81,7 +81,7 @@ export function tmuxSessionExists(name: string): boolean {
  */
 export function killTmuxSession(name: string): void {
   try {
-    execFileSync('tmux', ['-L', TMUX_SOCKET, 'kill-session', '-t', name], { stdio: 'ignore' });
+    execFileSync('tmux', ['-S', TMUX_SOCKET_PATH, 'kill-session', '-t', name], { stdio: 'ignore' });
   } catch {
     // Session already gone — fine
   }
@@ -104,7 +104,7 @@ export function killAllClshTmuxSessions(): void {
 export function capturePaneContent(tmuxName: string): string {
   try {
     const content = execFileSync('tmux', [
-      '-L', TMUX_SOCKET,
+      '-S', TMUX_SOCKET_PATH,
       'capture-pane', '-t', tmuxName,
       '-p', '-S', '-', '-e',
     ], { encoding: 'utf-8' });

@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { basename } from 'node:path';
 import type { ShellType, DefaultableShell } from './types.js';
 import type { DbStatements } from './db.js';
-import { tmuxSessionExists, killTmuxSession, listClshTmuxSessions, capturePaneContent, TMUX_SOCKET } from './tmux.js';
+import { tmuxSessionExists, killTmuxSession, listClshTmuxSessions, capturePaneContent, TMUX_SOCKET_PATH } from './tmux.js';
 import { ControlModeLineBuffer, buildSendKeysCommands } from './control-mode-parser.js';
 
 /** Maximum number of buffer entries retained per session for reconnection replay. */
@@ -327,7 +327,7 @@ export class PTYManager {
       cmd = 'tmux';
       args = [
         '-CC',
-        '-L', TMUX_SOCKET,
+        '-S', TMUX_SOCKET_PATH,
         '-f', this.tmuxConfPath,
         'new-session',
         '-s', tmuxName as string,
@@ -416,8 +416,8 @@ export class PTYManager {
     const capturedContent = capturePaneContent(tmuxName);
 
     const args = this.tmuxConfPath
-      ? ['-CC', '-L', TMUX_SOCKET, '-f', this.tmuxConfPath, 'attach-session', '-t', tmuxName]
-      : ['-CC', '-L', TMUX_SOCKET, 'attach-session', '-t', tmuxName];
+      ? ['-CC', '-S', TMUX_SOCKET_PATH, '-f', this.tmuxConfPath, 'attach-session', '-t', tmuxName]
+      : ['-CC', '-S', TMUX_SOCKET_PATH, 'attach-session', '-t', tmuxName];
 
     // Use homedir() as fallback if savedCwd doesn't exist
     const cwd = savedCwd && existsSync(savedCwd) ? savedCwd : homedir();
