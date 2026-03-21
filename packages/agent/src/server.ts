@@ -108,6 +108,12 @@ function findWebDist(): string | null {
 /** Maximum total WebSocket connections allowed (Finding #11). */
 const MAX_WS_CONNECTIONS = 50
 
+/** Maximum unauthenticated WebSocket connections per IP (Finding #14). */
+const MAX_UNAUTH_PER_IP = 5
+
+/** Track WebSocket connections per IP for rate limiting. */
+const connectionsPerIp = new Map<string, number>()
+
 /** Track consecutive password failures for lockout (Finding #3). */
 let consecutivePasswordFailures = 0
 let lockoutUntil = 0
@@ -196,6 +202,14 @@ export function createAppServer(
         return false
       }
 
+      // Per-IP connection limit
+      const ip = info.req.socket.remoteAddress ?? 'unknown'
+      const currentCount = connectionsPerIp.get(ip) ?? 0
+      if (currentCount >= MAX_UNAUTH_PER_IP) {
+        console.warn(`  WS rejected: per-IP limit reached for ${ip}`)
+        return false
+      }
+
       const origin = info.origin;
       // Allow connections with no origin header (non-browser clients, CLIs)
       if (!origin) return true;
@@ -204,6 +218,20 @@ export function createAppServer(
       return false;
     },
   });
+
+  // Track per-IP connection counts
+  wss.on('connection', (ws, req) => {
+    const ip = req.socket.remoteAddress ?? 'unknown'
+    connectionsPerIp.set(ip, (connectionsPerIp.get(ip) ?? 0) + 1)
+    ws.on('close', () => {
+      const count = (connectionsPerIp.get(ip) ?? 1) - 1
+      if (count <= 0) {
+        connectionsPerIp.delete(ip)
+      } else {
+        connectionsPerIp.set(ip, count)
+      }
+    })
+  })
 
   const WS_PING_INTERVAL = 30_000;
   const pingInterval = setInterval(() => {
@@ -367,36 +395,7 @@ function mountAuthRoutes(
     }
   });
 
-  // ── Lock state (client hash storage + restoration) ──
-
-  // POST /api/auth/lock/client-hash — sync client-side password hash to server (authenticated)
-  app.post('/api/auth/lock/client-hash', authLimiter, async (req, res) => {
-    try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Authorization required' });
-        return;
-      }
-      try {
-        await verifySession(authHeader.slice(7), config.jwtSecret, statements);
-      } catch {
-        res.status(401).json({ error: 'Invalid or expired token' });
-        return;
-      }
-
-      const { clientHash } = req.body as { clientHash?: string };
-      if (!clientHash || typeof clientHash !== 'string') {
-        res.status(400).json({ error: 'Missing clientHash' });
-        return;
-      }
-
-      statements.upsertClientHash.run(clientHash);
-      res.json({ ok: true });
-    } catch (err) {
-      console.error('Client hash sync error:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
+  // ── Lock state ──
 
   // GET /api/auth/lock/state — restore lock state for PWA (authenticated)
   app.get('/api/auth/lock/state', async (req, res) => {
@@ -414,11 +413,9 @@ function mountAuthRoutes(
       }
 
       const passwordRow = statements.getPassword.get()
-      const clientHashRow = statements.getClientHash.get()
 
       res.json({
         passwordConfigured: !!passwordRow,
-        clientPwdHash: clientHashRow?.hash ?? null,
       })
     } catch (err) {
       console.error('Lock state error:', err);

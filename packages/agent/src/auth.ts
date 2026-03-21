@@ -42,7 +42,7 @@ export function verifyBootstrapToken(
 
 export interface SessionJWTClaims {
   email?: string;
-  authMethod: 'bootstrap' | 'password' | 'biometric';
+  authMethod: 'bootstrap' | 'password';
 }
 
 /**

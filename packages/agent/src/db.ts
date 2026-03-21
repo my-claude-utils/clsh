@@ -18,13 +18,6 @@ export interface PasswordRow {
   updated_at: string;
 }
 
-export interface BiometricRow {
-  id: number;
-  credential_id: string;
-  user_id: string;
-  created_at: string;
-}
-
 export interface DbStatements {
   insertBootstrapToken: Database.Statement<[string, string]>;
   getBootstrapToken: Database.Statement<[string], { id: string; hash: string; created_at: string }>;
@@ -43,11 +36,6 @@ export interface DbStatements {
   getPassword: Database.Statement<[], PasswordRow>;
   upsertPassword: Database.Statement<[string]>;
   deletePassword: Database.Statement<[]>;
-  getBiometric: Database.Statement<[], BiometricRow>;
-  upsertBiometric: Database.Statement<[string, string]>;
-  deleteBiometric: Database.Statement<[]>;
-  getClientHash: Database.Statement<[], { id: number; hash: string }>;
-  upsertClientHash: Database.Statement<[string]>;
 }
 
 export interface DbContext {
@@ -115,17 +103,6 @@ export function initDatabase(dbPath: string): DbContext {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS lock_biometric (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      credential_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS lock_client_hash (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      hash TEXT NOT NULL
-    );
   `);
 
   // Prepare statements for repeated use
@@ -181,23 +158,6 @@ export function initDatabase(dbPath: string): DbContext {
     ),
     deletePassword: db.prepare(
       'DELETE FROM user_password WHERE id = 1',
-    ),
-    getBiometric: db.prepare(
-      'SELECT id, credential_id, user_id, created_at FROM lock_biometric WHERE id = 1',
-    ),
-    upsertBiometric: db.prepare(
-      `INSERT INTO lock_biometric (id, credential_id, user_id) VALUES (1, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET credential_id = excluded.credential_id, user_id = excluded.user_id`,
-    ),
-    deleteBiometric: db.prepare(
-      'DELETE FROM lock_biometric WHERE id = 1',
-    ),
-    getClientHash: db.prepare(
-      'SELECT id, hash FROM lock_client_hash WHERE id = 1',
-    ),
-    upsertClientHash: db.prepare(
-      `INSERT INTO lock_client_hash (id, hash) VALUES (1, ?)
-       ON CONFLICT (id) DO UPDATE SET hash = excluded.hash`,
     ),
   };
 
