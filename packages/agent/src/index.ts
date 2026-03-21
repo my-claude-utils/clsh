@@ -78,6 +78,7 @@ export async function main(): Promise<void> {
   let currentBootstrapToken = generateBootstrapToken();
   const tokenId = randomUUID();
   const tokenHash = hashToken(currentBootstrapToken);
+  statements.deleteAllBootstrapTokens.run();
   statements.insertBootstrapToken.run(tokenId, tokenHash);
 
   // 4. tmux session persistence (control mode -CC for scrollback support)
@@ -114,7 +115,7 @@ export async function main(): Promise<void> {
     }
   }
 
-  setupWebSocketHandler(wss, ptyManager, config.jwtSecret);
+  setupWebSocketHandler(wss, ptyManager, config.jwtSecret, statements);
 
   // 8. Start HTTP server (auto-finds open port if configured port is busy)
   const actualPort = await startServer(httpServer, config.port);
@@ -158,6 +159,7 @@ export async function main(): Promise<void> {
       currentBootstrapToken = generateBootstrapToken();
       const newTokenId = randomUUID();
       const newTokenHash = hashToken(currentBootstrapToken);
+      statements.deleteAllBootstrapTokens.run();
       statements.insertBootstrapToken.run(newTokenId, newTokenHash);
       const tunnelUrl = getTunnelUrl();
       if (tunnelUrl) {

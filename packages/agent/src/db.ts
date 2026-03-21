@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export interface PtySessionRow {
@@ -29,9 +29,11 @@ export interface DbStatements {
   insertBootstrapToken: Database.Statement<[string, string]>;
   getBootstrapToken: Database.Statement<[string], { id: string; hash: string; created_at: string }>;
   deleteBootstrapToken: Database.Statement<[string]>;
+  deleteAllBootstrapTokens: Database.Statement<[]>;
   insertSession: Database.Statement<[string, string, string]>;
   updateSessionLastSeen: Database.Statement<[string]>;
   getSession: Database.Statement<[string], { id: string; jwt_id: string; email: string; created_at: string; last_seen: string }>;
+  deleteSession: Database.Statement<[string]>;
   insertPtySession: Database.Statement<[string, string, string, string, string]>;
   getPtySession: Database.Statement<[string], PtySessionRow>;
   listPtySessions: Database.Statement<[], PtySessionRow>;
@@ -63,6 +65,14 @@ export function initDatabase(dbPath: string): DbContext {
   mkdirSync(dirname(dbPath), { recursive: true });
 
   const db = new Database(dbPath);
+
+  // Restrict DB file permissions — contains password hashes and session data (Finding #10)
+  try {
+    chmodSync(dbPath, 0o600);
+    chmodSync(dirname(dbPath), 0o700);
+  } catch {
+    // chmodSync may fail on Windows/NTFS — non-critical on non-POSIX
+  }
 
   // Enable WAL mode for better concurrent read performance
   db.pragma('journal_mode = WAL');
@@ -129,6 +139,9 @@ export function initDatabase(dbPath: string): DbContext {
     deleteBootstrapToken: db.prepare(
       'DELETE FROM bootstrap_tokens WHERE hash = ?',
     ),
+    deleteAllBootstrapTokens: db.prepare(
+      'DELETE FROM bootstrap_tokens',
+    ),
     insertSession: db.prepare(
       'INSERT INTO sessions (id, jwt_id, email) VALUES (?, ?, ?)',
     ),
@@ -137,6 +150,9 @@ export function initDatabase(dbPath: string): DbContext {
     ),
     getSession: db.prepare(
       'SELECT id, jwt_id, email, created_at, last_seen FROM sessions WHERE id = ?',
+    ),
+    deleteSession: db.prepare(
+      'DELETE FROM sessions WHERE id = ?',
     ),
     insertPtySession: db.prepare(
       'INSERT INTO pty_sessions (id, tmux_name, shell, name, cwd) VALUES (?, ?, ?, ?, ?)',
