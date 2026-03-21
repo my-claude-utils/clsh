@@ -8,8 +8,7 @@
 
 ### How to report
 
-1. **GitHub Security Advisory** (preferred): [Create a private advisory](https://github.com/my-claude-utils/clsh/security/advisories/new)
-2. **Email**: security@clsh.dev
+
 
 ### What to include
 
