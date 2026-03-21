@@ -25,6 +25,8 @@ export interface AgentConfig {
   dbPath: string;
   /** Set CLSH_NO_TMUX=1 to disable tmux session persistence even when tmux is available. */
   tmuxDisabled: boolean;
+  /** Set CLSH_NO_LOCAL_FALLBACK=1 to refuse falling back to plaintext HTTP when all tunnels fail. */
+  noLocalFallback: boolean;
   /** Resolved default shell for new terminal sessions.
    *  Set CLSH_SHELL=bash|zsh to override; otherwise auto-detected at startup. */
   defaultShell: DefaultableShell;
@@ -201,6 +203,7 @@ export function loadConfig(): AgentConfig {
     resendApiKey: getEnv('RESEND_API_KEY'),
     dbPath: getEnv('DB_PATH') ?? defaultDbPath,
     tmuxDisabled: getEnv('CLSH_NO_TMUX') === '1',
+    noLocalFallback: getEnv('CLSH_NO_LOCAL_FALLBACK') === '1',
     defaultShell,
   };
 }

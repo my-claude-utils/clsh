@@ -20,6 +20,7 @@ interface TunnelConfig {
   ngrokAuthtoken?: string;
   ngrokStaticDomain?: string;
   forcedMethod?: TunnelMethod;
+  noLocalFallback?: boolean;
 }
 let savedConfig: TunnelConfig | null = null;
 let currentTunnel: TunnelResult | null = null;
@@ -111,9 +112,10 @@ export async function createTunnel(
   ngrokAuthtoken?: string,
   ngrokStaticDomain?: string,
   forcedMethod?: 'ngrok' | 'ssh' | 'local',
+  noLocalFallback?: boolean,
 ): Promise<TunnelResult> {
   // Store config for recreation on tunnel death
-  savedConfig = { port, ngrokAuthtoken, ngrokStaticDomain, forcedMethod };
+  savedConfig = { port, ngrokAuthtoken, ngrokStaticDomain, forcedMethod, noLocalFallback };
   tunnelDead = false;
 
   // 1. ngrok — best reliability, optional free-account token
@@ -152,6 +154,13 @@ export async function createTunnel(
   }
 
   // 3. Local network — works on same Wi-Fi, no internet required
+  if (noLocalFallback) {
+    throw new Error(
+      'All tunnel methods failed and CLSH_NO_LOCAL_FALLBACK=1 is set. ' +
+        'Refusing to fall back to plaintext HTTP. Set NGROK_AUTHTOKEN or unset CLSH_NO_LOCAL_FALLBACK.',
+    )
+  }
+  console.warn('  ⚠  WARNING: Falling back to plaintext HTTP (no encrypted tunnel available)')
   const localIp = getLocalIP();
   const url = localIp ? `http://${localIp}:${port}` : `http://localhost:${port}`;
   currentTunnel = { url, method: 'local' };
@@ -239,6 +248,7 @@ async function recreate(): Promise<TunnelResult | null> {
     savedConfig.ngrokAuthtoken,
     savedConfig.ngrokStaticDomain,
     savedConfig.forcedMethod,
+    savedConfig.noLocalFallback,
   );
 }
 

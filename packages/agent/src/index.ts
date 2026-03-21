@@ -126,7 +126,13 @@ export async function main(): Promise<void> {
   // 9. Create tunnel — tries ngrok → SSH (localhost.run) → local network IP
   // If WEB_PORT was explicitly set (dev mode), tunnel to that; otherwise tunnel to the actual agent port
   const tunnelPort = config.webPort !== config.port ? config.webPort : actualPort;
-  const tunnel = await createTunnel(tunnelPort, config.ngrokAuthtoken, config.ngrokStaticDomain, config.tunnelMethod);
+  const tunnel = await createTunnel(
+    tunnelPort,
+    config.ngrokAuthtoken,
+    config.ngrokStaticDomain,
+    config.tunnelMethod,
+    config.noLocalFallback,
+  );
 
   // 10. Set allowed origins for CORS and WebSocket origin checks
   updateAllowedOrigins(actualPort, tunnel.url, config.webPort);
