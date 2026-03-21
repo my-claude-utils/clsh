@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
 
+describe('Finding #11: WebSocket connection limit', () => {
+  it('server.ts must define MAX_WS_CONNECTIONS', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(
+      new URL('../server.ts', import.meta.url),
+      'utf-8',
+    )
+    expect(source).toContain('MAX_WS_CONNECTIONS')
+  })
+})
+
 describe('Finding #1: Biometric auth disabled', () => {
   it('password/status response must not include credentialId or userId', async () => {
     const { readFileSync } = await import('node:fs')

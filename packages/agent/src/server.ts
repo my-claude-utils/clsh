@@ -104,6 +104,9 @@ function findWebDist(): string | null {
   return null;
 }
 
+/** Maximum total WebSocket connections allowed (Finding #11). */
+const MAX_WS_CONNECTIONS = 50
+
 /**
  * Creates and configures the Express app, HTTP server, and WebSocketServer.
  * Mounts auth routes, SSE routes, health check, and static file serving.
@@ -180,6 +183,12 @@ export function createAppServer(
     server: httpServer,
     maxPayload: 64 * 1024, // 64 KB max message size (H3)
     verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
+      // Reject if at connection limit
+      if (wss.clients.size >= MAX_WS_CONNECTIONS) {
+        console.warn('  WS rejected: connection limit reached')
+        return false
+      }
+
       const origin = info.origin;
       // Allow connections with no origin header (non-browser clients, CLIs)
       if (!origin) return true;
