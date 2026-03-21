@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
-import { verifySession } from './auth.js';
+import { verifySession } from './auth.js'
+import { auditLog } from './audit.js';
 import type { DbStatements } from './db.js';
 import { PTYManager, type PTYSession } from './pty-manager.js';
 import type { ClientMessage, ServerMessage, ShellType } from './types.js';
@@ -103,11 +104,13 @@ async function handleConnection(
       } catch {
         send(ws, { type: 'auth_error', message: 'Invalid or expired token' });
         ws.close(WS_CLOSE_UNAUTHORIZED, 'Invalid or expired token');
+        auditLog('ws.auth.failed', { ip: _req.socket.remoteAddress })
         return;
       }
 
       // Authentication succeeded
       send(ws, { type: 'auth_ok' });
+      auditLog('ws.connected', { ip: _req.socket.remoteAddress })
       setupAuthenticatedHandlers(ws, ptyManager, subscriptions);
     })();
   });
@@ -115,6 +118,7 @@ async function handleConnection(
   ws.on('close', () => {
     clearTimeout(authTimeout);
     subscriptions.delete(ws);
+    auditLog('ws.disconnected', { ip: _req.socket.remoteAddress })
   });
 
   ws.on('error', () => {

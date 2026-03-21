@@ -17,7 +17,8 @@ import {
 } from './auth.js';
 import type { DbStatements } from './db.js';
 import type { AgentConfig } from './config.js';
-import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from './password.js';
+import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from './password.js'
+import { auditLog } from './audit.js';
 
 export interface ServerContext {
   app: Express;
@@ -255,6 +256,7 @@ function mountAuthRoutes(
       statements.insertSession.run(jti, jti, '');
 
       res.json({ token: jwt });
+      auditLog('auth.login', { method: 'bootstrap', ip: req.ip })
     } catch (err) {
       console.error('Bootstrap auth error:', err);
       res.status(500).json({ error: 'Internal server error' });
@@ -307,6 +309,7 @@ function mountAuthRoutes(
       statements.upsertPassword.run(hash);
 
       res.json({ ok: true });
+      auditLog('auth.password.setup', { ip: req.ip })
     } catch (err) {
       console.error('Password setup error:', err);
       res.status(500).json({ error: 'Internal server error' });
@@ -325,6 +328,7 @@ function mountAuthRoutes(
       const row = statements.getPassword.get();
       if (!row || !verifyPassword(password, row.hash)) {
         res.status(401).json({ error: 'Invalid password' });
+        auditLog('auth.login.failed', { method: 'password', ip: req.ip })
         return;
       }
 
@@ -335,6 +339,7 @@ function mountAuthRoutes(
       statements.insertSession.run(jti, jti, '');
 
       res.json({ token: jwt });
+      auditLog('auth.login', { method: 'password', ip: req.ip })
     } catch (err) {
       console.error('Password auth error:', err);
       res.status(500).json({ error: 'Internal server error' });
@@ -408,15 +413,18 @@ function mountAuthRoutes(
         res.status(401).json({ error: 'Authorization required' });
         return;
       }
+      let jti: string | undefined
       try {
         const { payload } = await verifyJWT(authHeader.slice(7), config.jwtSecret);
         if (payload.jti) {
+          jti = payload.jti
           statements.deleteSession.run(payload.jti);
         }
       } catch {
         // Token invalid — already effectively logged out
       }
       res.json({ ok: true });
+      auditLog('auth.logout', { jti, ip: req.ip })
     } catch (err) {
       console.error('Logout error:', err);
       res.status(500).json({ error: 'Internal server error' });
