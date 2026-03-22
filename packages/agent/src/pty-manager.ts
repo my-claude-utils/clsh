@@ -63,12 +63,13 @@ const ALLOWED_ENV_VARS = new Set([
   'GIT_EDITOR',
   // Claude Code (the primary use case for this tool)
   'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
   'CLAUDE_CODE_USE_BEDROCK',
   'CLAUDE_CODE_USE_VERTEX',
 ])
 
-/** Prefixes allowed for env vars (e.g., XDG_*, NPM_CONFIG_*). */
-const ALLOWED_ENV_PREFIXES = ['XDG_', 'NPM_CONFIG_']
+/** Prefixes allowed for env vars (e.g., XDG_*, NPM_CONFIG_*, CLAUDE_*). */
+const ALLOWED_ENV_PREFIXES = ['XDG_', 'NPM_CONFIG_', 'CLAUDE_']
 
 /** Maps shell types to their executable and arguments. */
 const SHELL_MAP: Record<ShellType, [string, string[]]> = {
