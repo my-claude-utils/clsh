@@ -4,7 +4,7 @@ import ngrok from '@ngrok/ngrok'
 // @ts-expect-error -- qrcode-terminal has no type declarations
 import qrcode from 'qrcode-terminal'
 
-export type TunnelMethod = 'ngrok' | 'ssh' | 'local'
+export type TunnelMethod = 'ngrok' | 'tailscale' | 'ssh' | 'local'
 
 export interface TunnelResult {
   url: string
@@ -37,6 +37,31 @@ function getLocalIP(): string | null {
     if (!interfaces) continue
     for (const iface of interfaces) {
       if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Returns the Tailscale IP if available (100.64.0.0/10 CGNAT range).
+ * Checks for interfaces named "tailscale0" (macOS/Linux) or containing "Tailscale" (Windows).
+ * Tailscale traffic is end-to-end encrypted via WireGuard — no third party can see it.
+ */
+function getTailscaleIP(): string | null {
+  const nets = networkInterfaces()
+  for (const [name, interfaces] of Object.entries(nets)) {
+    if (!interfaces) continue
+    if (!name.toLowerCase().includes('tailscale')) continue
+
+    for (const iface of interfaces) {
+      if (iface.family !== 'IPv4' || iface.internal) continue
+      // Validate 100.64.0.0/10 range (Tailscale CGNAT)
+      const parts = iface.address.split('.')
+      const first = parseInt(parts[0], 10)
+      const second = parseInt(parts[1], 10)
+      if (first === 100 && second >= 64 && second <= 127) {
         return iface.address
       }
     }
@@ -107,15 +132,16 @@ function createSSHTunnel(localPort: number): Promise<string> {
  * Creates a public tunnel to expose the local server.
  *
  * Priority order:
- *  1. ngrok    — if NGROK_AUTHTOKEN is set (most reliable, needs free account)
- *  2. SSH      — localhost.run via SSH, zero install, no account needed
- *  3. local    — local network IP, works when phone is on the same Wi-Fi
+ *  1. ngrok     — if NGROK_AUTHTOKEN is set (most reliable, needs free account)
+ *  2. tailscale — if Tailscale interface detected (E2E encrypted, no third party)
+ *  3. SSH       — localhost.run via SSH, zero install, no account needed
+ *  4. local     — local network IP, works when phone is on the same Wi-Fi
  */
 export async function createTunnel(
   port: number,
   ngrokAuthtoken?: string,
   ngrokStaticDomain?: string,
-  forcedMethod?: 'ngrok' | 'ssh' | 'local',
+  forcedMethod?: TunnelMethod,
   noLocalFallback?: boolean,
 ): Promise<TunnelResult> {
   // Store config for recreation on tunnel death
@@ -123,7 +149,12 @@ export async function createTunnel(
   tunnelDead = false
 
   // 1. ngrok — best reliability, optional free-account token
-  if (forcedMethod !== 'ssh' && forcedMethod !== 'local' && ngrokAuthtoken) {
+  if (
+    forcedMethod !== 'tailscale' &&
+    forcedMethod !== 'ssh' &&
+    forcedMethod !== 'local' &&
+    ngrokAuthtoken
+  ) {
     try {
       const ngrokOpts: Parameters<typeof ngrok.forward>[0] = {
         addr: port,
@@ -138,11 +169,24 @@ export async function createTunnel(
         return currentTunnel
       }
     } catch {
-      // ngrok failed — try SSH
+      // ngrok failed — try Tailscale
     }
   }
 
-  // 2. localhost.run via SSH (pre-installed on macOS, no account needed)
+  // 2. Tailscale — E2E encrypted via WireGuard, no third party sees traffic
+  if (forcedMethod !== 'ssh' && forcedMethod !== 'local') {
+    const tailscaleIP = getTailscaleIP()
+    if (tailscaleIP) {
+      const url = `http://${tailscaleIP}:${port}`
+      currentTunnel = { url, method: 'tailscale' }
+      return currentTunnel
+    }
+    if (forcedMethod === 'tailscale') {
+      throw new Error('TUNNEL=tailscale but no Tailscale interface found. Is Tailscale running?')
+    }
+  }
+
+  // 3. localhost.run via SSH (pre-installed on macOS, no account needed)
   if (forcedMethod === 'local') {
     const localIp = getLocalIP()
     const url = localIp ? `http://${localIp}:${port}` : `http://localhost:${port}`
@@ -157,7 +201,7 @@ export async function createTunnel(
     // SSH failed — fall back to local
   }
 
-  // 3. Local network — works on same Wi-Fi, no internet required
+  // 4. Local network — works on same Wi-Fi, no internet required
   if (noLocalFallback) {
     throw new Error(
       'All tunnel methods failed and CLSH_NO_LOCAL_FALLBACK=1 is set. ' +
@@ -210,9 +254,15 @@ export function printAccessInfo(
     console.log('')
     console.log(`${o}  URL:   ${r}${publicUrl}`)
     console.log(`${o}  Token: ${r}${bootstrapToken}  ${dim}(one-time, expires in 5 min)${r}`)
-    console.log(
-      `${o}  Mode:  ${r}${method === 'ngrok' ? 'remote (ngrok)' : method === 'ssh' ? 'remote (ssh)' : 'local Wi-Fi only'}`,
-    )
+    const modeLabel =
+      method === 'ngrok'
+        ? 'remote (ngrok)'
+        : method === 'tailscale'
+          ? 'remote (tailscale)'
+          : method === 'ssh'
+            ? 'remote (ssh)'
+            : 'local Wi-Fi only'
+    console.log(`${o}  Mode:  ${r}${modeLabel}`)
     if (method === 'local') {
       console.log('')
       console.log(`${o}  ⚠  Local mode — phone must be on same Wi-Fi.${r}`)
@@ -232,7 +282,8 @@ export function printAccessInfo(
  */
 async function isTunnelAlive(): Promise<boolean> {
   if (tunnelDead || !currentTunnel) return false
-  if (currentTunnel.method === 'local') return true
+  // Tailscale and local IPs are stable — no health check needed
+  if (currentTunnel.method === 'local' || currentTunnel.method === 'tailscale') return true
   try {
     const res = await fetch(`${currentTunnel.url}/api/health`, {
       signal: AbortSignal.timeout(5_000),

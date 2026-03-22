@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState, type RefObject } from 'react'
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 
 import { CLSH_THEME } from '../lib/theme';
@@ -57,6 +58,10 @@ export function useTerminal(
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
+
+    // Make URLs clickable/tappable in the terminal
+    const webLinksAddon = new WebLinksAddon();
+    terminal.loadAddon(webLinksAddon);
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;

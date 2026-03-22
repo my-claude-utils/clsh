@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/AntiGravity/DOW/**)",
+      "Read(//d/Dev/**)",
+      "Read(//d/DecreeWise/**)",
+      "Bash(npm run lint*)",
+      "Bash(npm run typecheck*)",
+      "Bash(npm run build*)",
+      "Bash(npm run test*)",
+      "Bash(npm run dev*)",
+      "Bash(npm install*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git branch*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git stash*)",
+      "Bash(npx prettier*)",
+      "Bash(npx vitest*)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" pr*)",
+      "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" issue*)",
+      "Bash(npm run:*)",
+      "Bash(npx turbo:*)"
+    ]
+  }
+}

@@ -42,6 +42,20 @@ describe('buildSafeEnv (Finding #9: env var allowlist)', () => {
     expect(env['ANTHROPIC_API_KEY']).toBe('sk-ant-...')
   })
 
+  it('allows ANTHROPIC_AUTH_TOKEN (bearer auth for Claude Code)', () => {
+    process.env['ANTHROPIC_AUTH_TOKEN'] = 'sk-ant-oat01-...'
+    const env = buildSafeEnv()
+    expect(env['ANTHROPIC_AUTH_TOKEN']).toBe('sk-ant-oat01-...')
+  })
+
+  it('passes through CLAUDE_ prefixed vars (e.g., CLAUDE_CONFIG_DIR)', () => {
+    process.env['CLAUDE_CONFIG_DIR'] = '/home/test/.claude'
+    process.env['CLAUDE_CODE_USE_BEDROCK'] = '1'
+    const env = buildSafeEnv()
+    expect(env['CLAUDE_CONFIG_DIR']).toBe('/home/test/.claude')
+    expect(env['CLAUDE_CODE_USE_BEDROCK']).toBe('1')
+  })
+
   it('always sets FORCE_COLOR and TERM', () => {
     const env = buildSafeEnv()
     expect(env['FORCE_COLOR']).toBe('1')

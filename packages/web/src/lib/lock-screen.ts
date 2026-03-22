@@ -158,10 +158,34 @@ export async function authenticateBiometric(): Promise<boolean> {
 
 // --- Password ---
 
+// Simple hash fallback for non-secure contexts (HTTP without localhost)
+// crypto.subtle is only available in secure contexts (HTTPS or localhost)
+function simpleHash(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash + char) | 0
+  }
+  // Convert to base64url-like string for consistency
+  const bytes = new Uint8Array([
+    (hash >>> 24) & 0xff,
+    (hash >>> 16) & 0xff,
+    (hash >>> 8) & 0xff,
+    hash & 0xff,
+  ])
+  return toBase64Url(bytes.buffer)
+}
+
 async function hashPassword(password: string): Promise<string> {
-  const encoded = new TextEncoder().encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', encoded);
-  return toBase64Url(hash);
+  // crypto.subtle requires secure context (HTTPS or localhost)
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const encoded = new TextEncoder().encode(password);
+    const hash = await crypto.subtle.digest('SHA-256', encoded);
+    return toBase64Url(hash);
+  }
+  // Fallback for HTTP (e.g., Tailscale direct IP access)
+  // This is less secure but acceptable for local lock screen
+  return simpleHash(password)
 }
 
 export async function setupPassword(password: string): Promise<void> {

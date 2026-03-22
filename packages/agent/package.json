@@ -25,7 +25,7 @@
     }
   },
   "scripts": {
-    "dev": "WEB_PORT=4031 tsx watch src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
