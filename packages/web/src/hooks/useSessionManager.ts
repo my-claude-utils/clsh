@@ -97,7 +97,11 @@ export function useSessionManager(
     if (!auth.isAuthenticated || !auth.token) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // In dev mode, connect directly to agent port to bypass Vite's WS proxy
+    // which fails in WSL environments (ECONNRESET)
+    const wsUrl = import.meta.env.DEV
+      ? `ws://${window.location.hostname}:${__DEV_AGENT_PORT__}/ws`
+      : `${protocol}//${window.location.host}/ws`;
 
     const client = new TerminalWSClient({
       url: wsUrl,

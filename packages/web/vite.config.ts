@@ -7,10 +7,15 @@ const agentPort = process.env.AGENT_PORT || '4030'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    // Expose agent port to frontend so it can connect directly in dev mode,
+    // bypassing Vite's WebSocket proxy (which fails in WSL environments)
+    __DEV_AGENT_PORT__: JSON.stringify(agentPort),
+  },
   server: {
     port: 4031,
     host: true, // bind to 0.0.0.0 so phones on the same Wi-Fi can connect
-    allowedHosts: ['.ngrok-free.dev', '.ngrok.io', '.localhost.run', '.lhr.life'],
+    allowedHosts: 'all', // Allow Tailscale IPs and all tunnel domains
     proxy: {
       '/ws': {
         target: `ws://localhost:${agentPort}`,
