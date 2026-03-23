@@ -4,6 +4,7 @@ import { TitleBar } from './TitleBar';
 import { ContextStrip } from './ContextStrip';
 import { MacBookKeyboard } from './MacBookKeyboard';
 import { IOSKeyboard } from './IOSKeyboard';
+import { TerminalAccessoryBar } from './TerminalAccessoryBar';
 import type { TerminalViewProps } from '../lib/types';
 
 /**
@@ -169,7 +170,9 @@ export function TerminalView({
         }}
       />
 
-      {!nativeKeyboard && (
+      {nativeKeyboard ? (
+        <TerminalAccessoryBar onKey={handleKey} />
+      ) : (
         <>
           <ContextStrip onKey={handleKey} />
           {skin === 'ios-terminal' ? (

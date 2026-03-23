@@ -4,9 +4,11 @@ const STORAGE_KEY = 'clsh_native_keyboard';
 
 function load(): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'true';
+    const stored = localStorage.getItem(STORAGE_KEY);
+    // Default to true (native keyboard) if never set
+    return stored === null ? true : stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 }
 
