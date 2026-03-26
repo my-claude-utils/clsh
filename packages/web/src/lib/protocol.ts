@@ -44,6 +44,12 @@ export type ServerMessage =
         status: 'run' | 'idle'
       }>
     }
-  | { type: 'session_update'; sessionId: string; name: string; cwd: string; status: 'run' | 'idle' }
+  | {
+      type: 'session_update'
+      sessionId: string
+      name: string
+      cwd: string
+      status: 'run' | 'idle' | 'attention' | 'sleeping'
+    }
   | { type: 'error'; message: string }
   | { type: 'pong' }

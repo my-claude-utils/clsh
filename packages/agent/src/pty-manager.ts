@@ -6,6 +6,7 @@ import { basename } from 'node:path'
 import type { ShellType, DefaultableShell } from './types.js'
 import type { DbStatements } from './db.js'
 import type { NotificationManager } from './notifications/manager.js'
+import { stripAnsi } from './notifications/triggers.js'
 import {
   tmuxSessionExists,
   killTmuxSession,
@@ -83,11 +84,14 @@ const SHELL_MAP: Record<ShellType, [string, string[]]> = {
 /** Shell types that can be wrapped in tmux for persistence. */
 const TMUX_WRAPPABLE: Set<ShellType> = new Set(['bash', 'zsh', 'claude'])
 
+/** Extended session status for status indicators. */
+export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping'
+
 /** Session metadata passed to update listeners. */
 export interface SessionMeta {
   name: string
   cwd: string
-  status: 'run' | 'idle'
+  status: SessionStatus
 }
 
 export interface PTYSession {
@@ -97,7 +101,7 @@ export interface PTYSession {
   buffer: string[]
   name: string
   cwd: string
-  status: 'run' | 'idle'
+  status: SessionStatus
   lastActivityAt: number
   /** tmux session name if wrapped, null if raw pty */
   tmuxName: string | null
@@ -210,6 +214,38 @@ export class PTYManager {
     }
   }
 
+  /** Simple attention patterns for status indicators (subset of notification triggers). */
+  private static readonly ATTENTION_PATTERNS = [
+    /Allow\s+\w+.*\?\s*\(Y\)es/i,
+    /Allow\s+tool\s+use/i,
+    /Do you want to proceed\?/i,
+    /\(y\/n\)/i,
+    /Allow\s+(Read|Write|Edit|Bash|Glob|Grep)/,
+    /\bERROR\b/,
+    /\bFAILED\b/,
+    /\bFAIL\b\s/,
+    /Traceback \(most recent call last\)/,
+  ]
+
+  /** Check if output contains attention-worthy patterns. */
+  private checkAttention(session: PTYSession, data: string): void {
+    const stripped = stripAnsi(data)
+    const lines = stripped.split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      for (const pattern of PTYManager.ATTENTION_PATTERNS) {
+        if (pattern.test(trimmed)) {
+          if (session.status !== 'attention') {
+            session.status = 'attention'
+            this.emitUpdate(session)
+          }
+          return
+        }
+      }
+    }
+  }
+
   /** Whether a shell type should be wrapped in tmux. */
   private shouldWrapInTmux(shell: ShellType): boolean {
     return this.tmuxEnabled && TMUX_WRAPPABLE.has(shell)
@@ -244,7 +280,14 @@ export class PTYManager {
     }
 
     // Passive notification tap — feed data to monitor without blocking
+    // Also check for attention-worthy patterns
     this.notifications?.feedData(session.id, data)
+
+    // Check if this output contains attention patterns (permission prompt, error)
+    // Import the trigger detection inline to avoid circular deps
+    if (this.notifications?.active) {
+      this.checkAttention(session, data)
+    }
 
     session.buffer.push(data)
     if (session.buffer.length > MAX_BUFFER_SIZE) {
@@ -576,6 +619,12 @@ export class PTYManager {
     const session = this.sessions.get(id)
     if (!session) {
       throw new Error(`Session not found: ${id}`)
+    }
+
+    // Clear attention status on user input
+    if (session.status === 'attention') {
+      session.status = 'run'
+      this.emitUpdate(session)
     }
 
     if (session.tmuxName) {

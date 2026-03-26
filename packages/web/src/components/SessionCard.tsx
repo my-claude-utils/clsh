@@ -11,6 +11,14 @@ interface SessionCardProps {
 export function SessionCard({ session, isActive, onSelect, onClose }: SessionCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  const statusColors: Record<string, string> = {
+    idle: '#28c840', // green
+    run: '#f5a623', // amber
+    attention: '#ef4444', // red
+    sleeping: '#666', // gray
+  }
+  const statusColor = statusColors[session.status] ?? '#666'
+
   const badgeStyle: React.CSSProperties =
     session.status === 'run'
       ? { background: 'rgba(0,255,135,0.15)', color: '#f97316' }
@@ -89,20 +97,18 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
         >
           {session.name}
         </span>
-        {session.status === 'run' && (
-          <span
-            className="flex-shrink-0 rounded px-1"
-            style={{
-              fontSize: 9,
-              fontFamily: 'JetBrains Mono, monospace',
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              ...badgeStyle,
-            }}
-          >
-            RUN
-          </span>
-        )}
+        {/* Status dot */}
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            background: statusColor,
+            flexShrink: 0,
+            animation: session.status === 'attention' ? 'pulse-dot 1.5s infinite' : 'none',
+          }}
+          title={session.status}
+        />
       </div>
 
       {/* Preview body */}

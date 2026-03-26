@@ -30,7 +30,7 @@ export type ServerMessage =
       pid: number
       name: string
       cwd: string
-      status: 'run' | 'idle'
+      status: 'run' | 'idle' | 'attention' | 'sleeping'
     }
   | {
       type: 'session_list'
@@ -40,9 +40,15 @@ export type ServerMessage =
         pid: number
         name: string
         cwd: string
-        status: 'run' | 'idle'
+        status: 'run' | 'idle' | 'attention' | 'sleeping'
       }>
     }
-  | { type: 'session_update'; sessionId: string; name: string; cwd: string; status: 'run' | 'idle' }
+  | {
+      type: 'session_update'
+      sessionId: string
+      name: string
+      cwd: string
+      status: 'run' | 'idle' | 'attention' | 'sleeping'
+    }
   | { type: 'error'; message: string }
   | { type: 'pong' }

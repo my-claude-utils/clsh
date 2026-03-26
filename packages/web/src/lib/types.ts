@@ -5,7 +5,7 @@
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
-export type SessionStatus = 'run' | 'idle'
+export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping'
 export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude'
 
 export interface Session {
