@@ -31,7 +31,7 @@ export type ServerMessage =
       pid: number
       name: string
       cwd: string
-      status: 'run' | 'idle'
+      status: 'run' | 'idle' | 'attention' | 'sleeping'
     }
   | {
       type: 'session_list'
@@ -41,7 +41,7 @@ export type ServerMessage =
         pid: number
         name: string
         cwd: string
-        status: 'run' | 'idle'
+        status: 'run' | 'idle' | 'attention' | 'sleeping'
       }>
     }
   | {
@@ -49,7 +49,7 @@ export type ServerMessage =
       sessionId: string
       name: string
       cwd: string
-      status: 'run' | 'idle' | 'attention' | 'sleeping'
+      status: 'run' | 'idle' | 'attention' | 'sleeping' | 'attention' | 'sleeping'
       cost?: number | null
     }
   | { type: 'error'; message: string }

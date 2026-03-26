@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 
 export interface AuthState {
   isAuthenticated: boolean
@@ -217,18 +217,21 @@ export function useAuth(): AuthReturn {
     setAuth(INITIAL_STATE)
   }, [])
 
-  // Auto-authenticate based on auth mode
+  // Auto-authenticate from URL token on mount (runs once)
+  const autoAuthRan = useRef(false)
   useEffect(() => {
+    if (autoAuthRan.current) return
+    autoAuthRan.current = true
+
     // Check hash fragment first (new format)
     if (window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.slice(1))
       const hashToken = hashParams.get('token')
       if (hashToken) {
-        // iOS Safari can throw on replaceState in PWA mode — non-critical
         try {
           window.history.replaceState({}, '', window.location.pathname)
         } catch {
-          /* ignore */
+          /* iOS Safari PWA — ignore */
         }
         void authenticateWithBootstrap(hashToken)
         return
@@ -242,7 +245,7 @@ export function useAuth(): AuthReturn {
       return
     }
 
-    // If already authenticated, skip mode check
+    // If already authenticated from localStorage, skip mode check
     if (auth.isAuthenticated) return
 
     // Check server auth mode — auto-authenticate for tailscale mode
@@ -253,7 +256,6 @@ export function useAuth(): AuthReturn {
         const { mode } = (await modeRes.json()) as { mode: string; skipBootstrap: boolean }
 
         if (mode === 'tailscale') {
-          // Auto-grant JWT — no credentials needed
           const autoRes = await fetch('/api/auth/auto')
           if (autoRes.ok) {
             const data = (await autoRes.json()) as { token: string }
@@ -269,7 +271,7 @@ export function useAuth(): AuthReturn {
         // Server unreachable — will retry via reconnection
       }
     })()
-  }, [authenticateWithBootstrap, auth.isAuthenticated])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
 
   const handleUnauthorized = useCallback(() => {
     // Token rejected by backend (expired or backend restarted with new JWT secret).

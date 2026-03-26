@@ -252,7 +252,11 @@ export function App() {
         <LockScreen hasBiometric={hasBiometric} onUnlock={unlock} />
       )}
       {showTemplatePicker && (
-        <TemplatePicker onSelect={handleTemplateSelect} onCancel={handleTemplateCancelPicker} />
+        <TemplatePicker
+          onSelect={handleTemplateSelect}
+          onCancel={handleTemplateCancelPicker}
+          token={auth.token}
+        />
       )}
       {!splashDone && <SplashScreen ready={splashReady} onComplete={() => setSplashDone(true)} />}
     </>

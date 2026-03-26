@@ -125,13 +125,27 @@ describe('detectTrigger', () => {
     expect(result!.trigger).toBe('error')
   })
 
-  it('detects error patterns - stack trace', () => {
-    const result = detectTrigger(
-      '    at Object.<anonymous> (/home/user/project/test.ts:42:13)',
-      defaultTriggers,
-    )
+  it('detects error patterns - [ERROR] bracketed', () => {
+    const result = detectTrigger('[ERROR] Connection refused', defaultTriggers)
     expect(result).not.toBeNull()
     expect(result!.trigger).toBe('error')
+  })
+
+  it('detects error patterns - Rust/TS error code', () => {
+    const result = detectTrigger('error[E0308]: mismatched types', defaultTriggers)
+    expect(result).not.toBeNull()
+    expect(result!.trigger).toBe('error')
+  })
+
+  it('does NOT false-positive on ERROR inside code output', () => {
+    // ERROR in the middle of a grep result or code line should not trigger
+    const result = detectTrigger('  const ERROR_HANDLER = getHandler()', defaultTriggers)
+    expect(result).toBeNull()
+  })
+
+  it('does NOT false-positive on error in import statement', () => {
+    const result = detectTrigger("import { handleError } from './utils'", defaultTriggers)
+    expect(result).toBeNull()
   })
 
   it('detects error patterns - Python traceback', () => {

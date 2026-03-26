@@ -868,29 +868,4 @@ export class PTYManager {
       this.autoSleepCheckInterval = null
     }
   }
-
-  /**
-   * Full cleanup — kills everything including tmux sessions and DB rows.
-   */
-  destroyAllIncludingTmux(): void {
-    for (const session of this.sessions.values()) {
-      session.pty.kill()
-      if (session.tmuxName) {
-        killTmuxSession(session.tmuxName)
-      }
-    }
-    this.sessions.clear()
-    this.updateListeners.clear()
-    if (this.idleCheckInterval) {
-      clearInterval(this.idleCheckInterval)
-      this.idleCheckInterval = null
-    }
-    if (this.db) {
-      try {
-        this.db.deleteAllPtySessions.run()
-      } catch {
-        /* ignore */
-      }
-    }
-  }
 }

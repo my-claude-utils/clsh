@@ -168,8 +168,21 @@ export function createAppServer(config: AgentConfig, statements: DbStatements): 
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
   })
 
-  // Session templates endpoint
-  app.get('/api/templates', (_req, res) => {
+  // Session templates endpoint (requires auth unless in tailscale mode)
+  app.get('/api/templates', async (req, res) => {
+    if (!shouldTrustConnection(config.authMode)) {
+      const authHeader = req.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Authorization required' })
+        return
+      }
+      try {
+        await verifySession(authHeader.slice(7), config.jwtSecret, statements)
+      } catch {
+        res.status(401).json({ error: 'Invalid or expired token' })
+        return
+      }
+    }
     res.json({
       templates: config.sessionTemplates ?? [],
       pinnedCommands: config.pinnedCommands ?? [],

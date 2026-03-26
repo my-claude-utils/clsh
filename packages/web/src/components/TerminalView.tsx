@@ -33,20 +33,24 @@ export function TerminalView({
     { nativeKeyboard },
   )
 
-  // Pinned commands for this session
+  // Pinned commands for this session — fetched once on mount, matched by initial name
   const [pinnedCommands, setPinnedCommands] = useState<PinnedCommand[]>([])
+  const initialNameRef = useRef(session.name)
 
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch('/api/templates')
+        const headers: Record<string, string> = {}
+        const jwt = localStorage.getItem('clsh_jwt')
+        if (jwt) headers['Authorization'] = `Bearer ${jwt}`
+        const res = await fetch('/api/templates', { headers })
         if (!res.ok) return
         const data = (await res.json()) as {
           templates: Array<{ name: string; pinnedCommands?: PinnedCommand[] }>
           pinnedCommands: PinnedCommand[]
         }
-        // Find template matching this session's name
-        const template = data.templates.find((t) => t.name === session.name)
+        // Find template matching the session's initial name (stable, not cwd-updated name)
+        const template = data.templates.find((t) => t.name === initialNameRef.current)
         const templateCmds = template?.pinnedCommands ?? []
         const globalCmds = data.pinnedCommands ?? []
         setPinnedCommands([...templateCmds, ...globalCmds])
@@ -54,7 +58,7 @@ export function TerminalView({
         // No pinned commands available
       }
     })()
-  }, [session.name])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- fetch once on mount
 
   // Rename editing state — lifted here so we can intercept keyboard input
   const [renaming, setRenaming] = useState(false)

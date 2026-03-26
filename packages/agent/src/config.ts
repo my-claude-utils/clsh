@@ -258,7 +258,13 @@ export function loadConfig(): AgentConfig {
     defaultShell,
     notifications,
     authMode: resolveAuthMode(fileConfig.auth),
-    sessionTemplates: fileConfig.sessionTemplates ?? [],
+    sessionTemplates: (fileConfig.sessionTemplates ?? []).filter(
+      (t) =>
+        t &&
+        typeof t.name === 'string' &&
+        typeof t.directory === 'string' &&
+        typeof t.shell === 'string',
+    ),
     pinnedCommands: fileConfig.pinnedCommands ?? [],
     autoSleep: {
       enabled: fileConfig.autoSleep?.enabled ?? false,

@@ -53,12 +53,20 @@ export function buildPushoverRequest(
   }
 }
 
+/** Escape Telegram Markdown V1 special characters in user content. */
+function escapeTelegramMarkdown(text: string): string {
+  return text.replace(/([_*`\[])/g, '\\$1')
+}
+
 /** Builds an HTTP request for Telegram. */
 export function buildTelegramRequest(
   channel: TelegramChannel,
   payload: NotificationPayload,
 ): HttpRequest {
-  const text = `*clsh — ${payload.session}*\n\`${payload.label}\`: ${payload.matched}`
+  const safeSession = escapeTelegramMarkdown(payload.session)
+  const safeLabel = escapeTelegramMarkdown(payload.label)
+  const safeMatched = escapeTelegramMarkdown(payload.matched)
+  const text = `*clsh — ${safeSession}*\n\`${safeLabel}\`: ${safeMatched}`
 
   return {
     url: `https://api.telegram.org/bot${channel.botToken}/sendMessage`,

@@ -21,8 +21,9 @@ export class SessionMonitor {
   /** Timer for idle-based completion detection. */
   private completionTimer: ReturnType<typeof setTimeout> | null = null
 
-  /** Time without output before considering Claude "idle/done" (5 seconds). */
-  private static readonly COMPLETION_IDLE_MS = 5_000
+  /** Time without output before considering Claude "idle/done" (15 seconds).
+   *  Longer than typical thinking pauses to avoid false positives. */
+  private static readonly COMPLETION_IDLE_MS = 15_000
 
   constructor(
     sessionId: string,
@@ -100,7 +101,11 @@ export class SessionMonitor {
     this.completionSent = true
 
     if (this.cooldown.shouldSend(this.sessionId, 'completion', 'Task completed')) {
-      this.sendNotification('completion', 'Task Complete', 'Claude has finished and is waiting for input')
+      this.sendNotification(
+        'completion',
+        'Task Complete',
+        'Claude has finished and is waiting for input',
+      )
     }
   }
 

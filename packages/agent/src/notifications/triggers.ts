@@ -53,16 +53,17 @@ const PERMISSION_PATTERNS = [
   /Allow\s+(Read|Write|Edit|Bash|Glob|Grep|WebFetch|WebSearch)/,
 ]
 
-// Error patterns
+// Error patterns — anchored or context-qualified to reduce false positives
+// on code output, grep results, and build logs.
 const ERROR_PATTERNS = [
-  /\bERROR\b/,
-  /\bFAILED\b/,
-  /\bFAIL\b\s/,
-  /\berror:/,
-  /\bError:/,
-  /Traceback \(most recent call last\)/,
-  /^\s*at\s+\S+\s+\(/, // stack trace line
-  /✗|✘/, // test failure marks
+  /^\s*ERROR\b/, // line starts with ERROR
+  /^\s*\[?ERROR\]?[\s:]/, // [ERROR] or ERROR: at line start
+  /\bFAILED\b/, // FAILED is specific enough
+  /^\s*FAIL\b\s/, // FAIL at line start (test runners)
+  /^\s*error\[\w+\]:/, // error[E0123]: (Rust, TS)
+  /^\s*error:/i, // error: at line start
+  /^Traceback \(most recent call last\)/, // Python traceback header
+  /^\s*✗|^\s*✘/, // test failure marks at line start
 ]
 
 /**

@@ -14,39 +14,61 @@ export function PinnedCommandsStrip({ commands, onExecute }: PinnedCommandsStrip
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didLongPress = useRef(false)
+  const didMove = useRef(false)
+  /** Index of the button currently being touched — prevents cross-button bleed. */
+  const activeTouchIdx = useRef<number | null>(null)
 
   if (commands.length === 0) return null
 
-  const handleTouchStart = useCallback((idx: number, command: string) => {
-    didLongPress.current = false
-    longPressTimer.current = setTimeout(() => {
-      didLongPress.current = true
-      void navigator.clipboard.writeText(command).then(() => {
-        setCopiedIdx(idx)
-        setTimeout(() => setCopiedIdx(null), 1500)
-      })
-    }, 500)
+  const cancelTouch = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    activeTouchIdx.current = null
   }, [])
 
+  const handleTouchStart = useCallback(
+    (idx: number, command: string) => {
+      cancelTouch()
+      didLongPress.current = false
+      didMove.current = false
+      activeTouchIdx.current = idx
+      longPressTimer.current = setTimeout(() => {
+        didLongPress.current = true
+        void navigator.clipboard.writeText(command).then(() => {
+          setCopiedIdx(idx)
+          setTimeout(() => setCopiedIdx(null), 1500)
+        })
+      }, 500)
+    },
+    [cancelTouch],
+  )
+
+  const handleTouchMove = useCallback(() => {
+    // User is scrolling the strip — cancel long-press and prevent tap execution
+    didMove.current = true
+    cancelTouch()
+  }, [cancelTouch])
+
   const handleTouchEnd = useCallback(
-    (command: string) => {
+    (idx: number, command: string) => {
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current)
         longPressTimer.current = null
       }
-      if (!didLongPress.current) {
+      // Only execute if: same button that started the touch, no scroll, no long-press
+      if (activeTouchIdx.current === idx && !didLongPress.current && !didMove.current) {
         onExecute(command + '\r')
       }
+      activeTouchIdx.current = null
     },
     [onExecute],
   )
 
   const handleTouchCancel = useCallback(() => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }, [])
+    cancelTouch()
+  }, [cancelTouch])
 
   return (
     <div
@@ -68,7 +90,8 @@ export function PinnedCommandsStrip({ commands, onExecute }: PinnedCommandsStrip
         <button
           key={`${cmd.label}-${idx}`}
           onTouchStart={() => handleTouchStart(idx, cmd.command)}
-          onTouchEnd={() => handleTouchEnd(cmd.command)}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={() => handleTouchEnd(idx, cmd.command)}
           onTouchCancel={handleTouchCancel}
           onMouseDown={(e) => {
             e.preventDefault()

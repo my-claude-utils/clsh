@@ -10,16 +10,19 @@ export interface SessionTemplate {
 interface TemplatePickerProps {
   onSelect: (template: SessionTemplate | null) => void
   onCancel: () => void
+  token: string | null
 }
 
-export function TemplatePicker({ onSelect, onCancel }: TemplatePickerProps) {
+export function TemplatePicker({ onSelect, onCancel, token }: TemplatePickerProps) {
   const [templates, setTemplates] = useState<SessionTemplate[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch('/api/templates')
+        const headers: Record<string, string> = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch('/api/templates', { headers })
         if (res.ok) {
           const data = (await res.json()) as { templates: SessionTemplate[] }
           setTemplates(data.templates)
