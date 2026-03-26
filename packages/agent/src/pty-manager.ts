@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import type { ShellType, DefaultableShell } from './types.js'
 import type { DbStatements } from './db.js'
+import type { NotificationManager } from './notifications/manager.js'
 import {
   tmuxSessionExists,
   killTmuxSession,
@@ -112,6 +113,7 @@ export interface PTYManagerOptions {
   tmuxConfPath?: string | null
   dbStatements?: DbStatements
   defaultShell: DefaultableShell
+  notificationManager?: NotificationManager
 }
 
 /**
@@ -166,12 +168,14 @@ export class PTYManager {
   private tmuxConfPath: string | null
   private db: DbStatements | null
   private defaultShell: DefaultableShell
+  private notifications: NotificationManager | null
 
   constructor(options: PTYManagerOptions) {
     this.tmuxEnabled = options.tmuxEnabled ?? false
     this.tmuxConfPath = options.tmuxConfPath ?? null
     this.db = options.dbStatements ?? null
     this.defaultShell = options.defaultShell
+    this.notifications = options.notificationManager ?? null
 
     this.idleCheckInterval = setInterval(() => {
       this.checkIdleSessions()
@@ -196,6 +200,8 @@ export class PTYManager {
       cwd: session.cwd,
       status: session.status,
     }
+    // Keep notification manager in sync with session name
+    this.notifications?.updateSessionName(session.id, session.name)
     const listeners = this.updateListeners.get(session.id)
     if (listeners) {
       for (const listener of listeners) {
@@ -236,6 +242,9 @@ export class PTYManager {
         }
       }
     }
+
+    // Passive notification tap — feed data to monitor without blocking
+    this.notifications?.feedData(session.id, data)
 
     session.buffer.push(data)
     if (session.buffer.length > MAX_BUFFER_SIZE) {
@@ -401,6 +410,9 @@ export class PTYManager {
 
     this.sessions.set(id, session)
 
+    // Register with notification system
+    this.notifications?.addSession(id, session.name)
+
     // Persist to DB for rediscovery
     if (tmuxName && this.db) {
       try {
@@ -507,6 +519,7 @@ export class PTYManager {
 
     this.wireControlModeHandlers(session, dataListeners, exitListeners)
     this.sessions.set(sessionId, session)
+    this.notifications?.addSession(sessionId, session.name)
     return session
   }
 
@@ -616,6 +629,7 @@ export class PTYManager {
     const session = this.sessions.get(id)
     if (!session) return
 
+    this.notifications?.removeSession(id)
     session.pty.kill()
 
     if (session.tmuxName) {
