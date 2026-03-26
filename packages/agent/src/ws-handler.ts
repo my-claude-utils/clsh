@@ -5,6 +5,7 @@ import { auditLog } from './audit.js'
 import type { DbStatements } from './db.js'
 import { PTYManager, type PTYSession } from './pty-manager.js'
 import type { ClientMessage, ServerMessage, ShellType } from './types.js'
+import type { ResolvedAuth } from './auth-config.js'
 
 /** WebSocket close codes. */
 const WS_CLOSE_UNAUTHORIZED = 4001
@@ -55,11 +56,12 @@ export function setupWebSocketHandler(
   ptyManager: PTYManager,
   jwtSecret: string,
   statements: DbStatements,
+  authMode?: ResolvedAuth,
 ): void {
   const subscriptions: SubscriptionMap = new Map()
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    void handleConnection(ws, req, ptyManager, jwtSecret, statements, subscriptions)
+    void handleConnection(ws, req, ptyManager, jwtSecret, statements, subscriptions, authMode)
   })
 }
 
@@ -70,7 +72,16 @@ async function handleConnection(
   jwtSecret: string,
   statements: DbStatements,
   subscriptions: SubscriptionMap,
+  authMode?: ResolvedAuth,
 ): Promise<void> {
+  // Tailscale mode: skip auth entirely — trust the network
+  if (authMode?.mode === 'tailscale') {
+    send(ws, { type: 'auth_ok' })
+    auditLog('ws.connected', { ip: _req.socket.remoteAddress, authSkipped: true })
+    setupAuthenticatedHandlers(ws, ptyManager, subscriptions)
+    return
+  }
+
   // H5: Auth via first WS message instead of query param.
   // Wait for { type: 'auth', token: '...' } as the first message.
   const authTimeout = setTimeout(() => {

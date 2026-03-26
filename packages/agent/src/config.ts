@@ -6,6 +6,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import type { DefaultableShell } from './types.js'
 import type { NotificationConfig } from './notifications/types.js'
 import { DEFAULT_NOTIFICATION_CONFIG } from './notifications/types.js'
+import type { AuthConfig, ResolvedAuth } from './auth-config.js'
+import { resolveAuthMode } from './auth-config.js'
 
 export interface AgentConfig {
   port: number
@@ -34,6 +36,8 @@ export interface AgentConfig {
   defaultShell: DefaultableShell
   /** Notification system configuration. */
   notifications: NotificationConfig
+  /** Auth mode configuration. */
+  authMode: ResolvedAuth
 }
 
 interface ClshConfigFile {
@@ -41,6 +45,7 @@ interface ClshConfigFile {
   ngrokStaticDomain?: string
   port?: number
   notifications?: Partial<NotificationConfig>
+  auth?: AuthConfig
 }
 
 /**
@@ -234,5 +239,6 @@ export function loadConfig(): AgentConfig {
     noLocalFallback: getEnv('CLSH_NO_LOCAL_FALLBACK') === '1',
     defaultShell,
     notifications,
+    authMode: resolveAuthMode(fileConfig.auth),
   }
 }

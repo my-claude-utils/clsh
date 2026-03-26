@@ -1,8 +1,8 @@
-import type { GridViewProps } from '../lib/types';
-import { SessionCard } from './SessionCard';
-import { NewSessionCard } from './NewSessionCard';
-import { WorkspaceBar } from './WorkspaceBar';
-import { PWAInstallBanner } from './PWAInstallBanner';
+import type { GridViewProps } from '../lib/types'
+import { SessionCard } from './SessionCard'
+import { NewSessionCard } from './NewSessionCard'
+import { WorkspaceBar } from './WorkspaceBar'
+import { PWAInstallBanner } from './PWAInstallBanner'
 
 /**
  * Phone home screen: tmux-style grid of session cards.
@@ -19,7 +19,7 @@ export function GridView({
   onOpenSettings,
   wsStatus,
 }: GridViewProps) {
-  const isConnected = wsStatus === 'connected';
+  const isConnected = wsStatus === 'connected'
   return (
     <div
       className="flex flex-col"
@@ -31,10 +31,7 @@ export function GridView({
       }}
     >
       {/* Header */}
-      <div
-        className="flex items-center justify-between px-4"
-        style={{ height: 44, flexShrink: 0 }}
-      >
+      <div className="flex items-center justify-between px-4" style={{ height: 44, flexShrink: 0 }}>
         <div className="flex items-center gap-2">
           <span
             style={{
@@ -100,9 +97,10 @@ export function GridView({
         <div
           className="mx-3 mb-2 rounded-lg px-3 py-2 flex items-center gap-2"
           style={{
-            background: wsStatus === 'reconnecting' || wsStatus === 'connecting'
-              ? 'rgba(249, 115, 22, 0.1)'
-              : 'rgba(239, 68, 68, 0.1)',
+            background:
+              wsStatus === 'reconnecting' || wsStatus === 'connecting'
+                ? 'rgba(249, 115, 22, 0.1)'
+                : 'rgba(239, 68, 68, 0.1)',
             border: `1px solid ${
               wsStatus === 'reconnecting' || wsStatus === 'connecting'
                 ? 'rgba(249, 115, 22, 0.3)'
@@ -116,28 +114,28 @@ export function GridView({
               width: 6,
               height: 6,
               borderRadius: '50%',
-              background: wsStatus === 'reconnecting' || wsStatus === 'connecting' ? '#f97316' : '#ef4444',
-              animation: wsStatus === 'reconnecting' || wsStatus === 'connecting' ? 'pulse-dot 1.5s infinite' : 'none',
+              background:
+                wsStatus === 'reconnecting' || wsStatus === 'connecting' ? '#f97316' : '#ef4444',
+              animation:
+                wsStatus === 'reconnecting' || wsStatus === 'connecting'
+                  ? 'pulse-dot 1.5s infinite'
+                  : 'none',
               flexShrink: 0,
             }}
           />
           <span style={{ fontSize: 11, color: '#999' }}>
             {wsStatus === 'reconnecting' || wsStatus === 'connecting'
-              ? 'Reconnecting to server...'
-              : 'Disconnected. Re-scan QR code or check if server is running.'}
+              ? 'Reconnecting...'
+              : sessions.length === 0
+                ? 'Session expired — tap + to create new session'
+                : 'Disconnected. Check if server is running.'}
           </span>
         </div>
       )}
 
       {/* Card grid */}
-      <div
-        className="flex-1 overflow-y-auto px-3 pb-2"
-        style={{ minHeight: 0 }}
-      >
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}
-        >
+      <div className="flex-1 overflow-y-auto px-3 pb-2" style={{ minHeight: 0 }}>
+        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           {sessions.map((session) => (
             <SessionCard
               key={session.id}
@@ -161,5 +159,5 @@ export function GridView({
         onSessionSelect={onSessionSelect}
       />
     </div>
-  );
+  )
 }

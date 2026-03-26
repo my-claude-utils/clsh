@@ -19,6 +19,7 @@ import type { DbStatements } from './db.js'
 import type { AgentConfig } from './config.js'
 import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from './password.js'
 import { auditLog } from './audit.js'
+import { shouldTrustConnection, shouldSkipBootstrap } from './auth-config.js'
 
 export interface ServerContext {
   app: Express
@@ -166,6 +167,84 @@ export function createAppServer(config: AgentConfig, statements: DbStatements): 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
   })
+
+  // Auth mode endpoint (tells frontend which auth mode is active)
+  app.get('/api/auth/mode', (_req, res) => {
+    res.json({
+      mode: config.authMode.mode,
+      skipBootstrap: shouldSkipBootstrap(config.authMode),
+    })
+  })
+
+  // Tailscale mode: auto-grant JWT on first visit (no token needed)
+  if (shouldTrustConnection(config.authMode)) {
+    app.get('/api/auth/auto', async (_req, res) => {
+      try {
+        const { token: jwt, jti } = await createSessionJWT(
+          { authMethod: 'bootstrap' },
+          config.jwtSecret,
+        )
+        statements.insertSession.run(jti, jti, '')
+        res.json({ token: jwt })
+        auditLog('auth.login', { method: 'tailscale-auto', ip: _req.ip })
+      } catch (err) {
+        console.error('Auto auth error:', err)
+        res.status(500).json({ error: 'Internal server error' })
+      }
+    })
+  }
+
+  // Persistent mode: magic link /auth?token=xxx sets cookie and redirects
+  if (config.authMode.mode === 'persistent' && config.authMode.token) {
+    const staticToken = config.authMode.token
+    app.get('/auth', async (req, res) => {
+      const token = req.query.token as string | undefined
+      if (token !== staticToken) {
+        res.status(401).send('Invalid token')
+        return
+      }
+      try {
+        const { token: jwt, jti } = await createSessionJWT(
+          { authMethod: 'bootstrap' },
+          config.jwtSecret,
+        )
+        statements.insertSession.run(jti, jti, '')
+        // Set httpOnly cookie with 1 year expiry
+        res.cookie('clsh_jwt', jwt, {
+          httpOnly: true,
+          maxAge: 365 * 24 * 60 * 60 * 1000,
+          sameSite: 'lax',
+          path: '/',
+        })
+        res.redirect('/')
+        auditLog('auth.login', { method: 'persistent-link', ip: req.ip })
+      } catch (err) {
+        console.error('Persistent auth error:', err)
+        res.status(500).send('Internal server error')
+      }
+    })
+
+    // Also accept the static token via POST for programmatic access
+    app.post('/api/auth/persistent', async (req, res) => {
+      try {
+        const { token } = req.body as { token?: string }
+        if (token !== staticToken) {
+          res.status(401).json({ error: 'Invalid token' })
+          return
+        }
+        const { token: jwt, jti } = await createSessionJWT(
+          { authMethod: 'bootstrap' },
+          config.jwtSecret,
+        )
+        statements.insertSession.run(jti, jti, '')
+        res.json({ token: jwt })
+        auditLog('auth.login', { method: 'persistent', ip: req.ip })
+      } catch (err) {
+        console.error('Persistent auth error:', err)
+        res.status(500).json({ error: 'Internal server error' })
+      }
+    })
+  }
 
   // Auth routes (rate-limited)
   mountAuthRoutes(app, config, statements)
