@@ -27,13 +27,17 @@ function extractLastOutput(chunks: string[]): string {
   let blockStart = 0
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim()
-    // Detect shell/claude prompts
+    // Detect shell/claude prompts — including Claude Code's box-drawing prompt
     if (
       /^\$\s/.test(line) ||
       /^>\s*$/.test(line) ||
       /^❯\s/.test(line) ||
       /^%\s/.test(line) ||
-      /^\w+@[\w-]+:/.test(line)
+      /^\w+@[\w-]+:/.test(line) ||
+      /^╭─/.test(line) || // Claude Code prompt box top
+      /^╰─/.test(line) || // Claude Code prompt box bottom
+      /^\s*\$\s/.test(line) || // indented shell prompt
+      /^~\//.test(line) // home-relative path prompt (zsh)
     ) {
       blockStart = i + 1
       break
@@ -111,70 +115,81 @@ export function ClipboardBridge({ getOutput, visible }: ClipboardBridgeProps) {
 
   if (!visible) return null
 
+  // Determine what the button does: copy specific block if detected, or copy last output
+  const hasBlocks = blocks.length > 0
+  const handleCopyTap = hasBlocks ? copyBlock : copyLastOutput
+
   return (
     <>
-      {/* Floating copy button — bottom right of terminal */}
-      {blocks.length > 0 && (
-        <button
-          type="button"
-          onClick={copyBlock}
-          style={{
-            position: 'fixed',
-            bottom: 300,
-            right: 12,
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            background: 'rgba(249, 115, 22, 0.15)',
-            border: '1px solid rgba(249, 115, 22, 0.4)',
-            color: '#f97316',
-            fontSize: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            zIndex: 40,
-            backdropFilter: 'blur(4px)',
-          }}
-        >
-          {blocks.length > 1 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: -4,
-                right: -4,
-                width: 16,
-                height: 16,
-                borderRadius: '50%',
-                background: '#f97316',
-                color: '#000',
-                fontSize: 9,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {blocks.length}
-            </span>
-          )}
-          &#x1F4CB;
-        </button>
-      )}
+      {/* Floating copy button — positioned absolutely in the terminal area, above the keyboard stack.
+       *  Uses absolute positioning relative to the flex parent instead of fixed bottom
+       *  to avoid being hidden behind the keyboard. */}
+      <button
+        type="button"
+        onClick={handleCopyTap}
+        style={{
+          position: 'absolute',
+          top: 52,
+          right: 8,
+          width: 32,
+          height: 32,
+          borderRadius: '50%',
+          background: 'rgba(249, 115, 22, 0.12)',
+          border: '1px solid rgba(249, 115, 22, 0.3)',
+          color: '#f97316',
+          fontSize: 14,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 40,
+          opacity: 0.7,
+          transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.opacity = '1'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.opacity = '0.7'
+        }}
+      >
+        {hasBlocks && blocks.length > 1 && (
+          <span
+            style={{
+              position: 'absolute',
+              top: -3,
+              right: -3,
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              background: '#f97316',
+              color: '#000',
+              fontSize: 8,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {blocks.length}
+          </span>
+        )}
+        &#x1F4CB;
+      </button>
 
       {/* Toast notification */}
       {toast && (
         <div
           style={{
-            position: 'fixed',
-            bottom: 340,
-            right: 12,
-            padding: '4px 12px',
+            position: 'absolute',
+            top: 88,
+            right: 8,
+            padding: '3px 10px',
             borderRadius: 6,
             background: 'rgba(40, 200, 64, 0.2)',
             border: '1px solid rgba(40, 200, 64, 0.4)',
             color: '#28c840',
-            fontSize: 11,
+            fontSize: 10,
             fontFamily: '"JetBrains Mono", monospace',
             zIndex: 41,
           }}

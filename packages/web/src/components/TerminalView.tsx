@@ -60,6 +60,15 @@ export function TerminalView({
     })()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- fetch once on mount
 
+  // Clipboard toast state
+  const [clipboardToast, setClipboardToast] = useState<string | null>(null)
+  const clipboardToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showClipboardToast = useCallback((msg: string) => {
+    setClipboardToast(msg)
+    if (clipboardToastTimer.current) clearTimeout(clipboardToastTimer.current)
+    clipboardToastTimer.current = setTimeout(() => setClipboardToast(null), 1500)
+  }, [])
+
   // Rename editing state — lifted here so we can intercept keyboard input
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -146,13 +155,18 @@ export function TerminalView({
         }
         return
       }
-      // Clipboard bridge: copy last output
+      // Clipboard bridge: copy last output via the ClipboardBridge's exposed function
       if (data === '__CLIPBOARD__') {
         const output = getSessionOutput(session.id)
         if (output.length > 0) {
           const text = extractLastOutput(output)
           if (text) {
-            void navigator.clipboard.writeText(text)
+            void navigator.clipboard
+              .writeText(text)
+              .then(() => showClipboardToast('Copied!'))
+              .catch(() => showClipboardToast('Copy failed'))
+          } else {
+            showClipboardToast('Nothing to copy')
           }
         }
         return
@@ -160,7 +174,16 @@ export function TerminalView({
       scrollToBottom()
       wsClient?.send({ type: 'stdin', sessionId: session.id, data })
     },
-    [renaming, commitRename, cancelRename, wsClient, session.id, scrollToBottom],
+    [
+      renaming,
+      commitRename,
+      cancelRename,
+      wsClient,
+      session.id,
+      scrollToBottom,
+      getSessionOutput,
+      showClipboardToast,
+    ],
   )
 
   // When native keyboard is enabled, wire xterm's onData to send keystrokes
@@ -209,6 +232,28 @@ export function TerminalView({
       />
 
       <ClipboardBridge getOutput={() => getSessionOutput(session.id)} visible={true} />
+
+      {/* Toast for context strip clipboard button */}
+      {clipboardToast && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 52,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '4px 12px',
+            borderRadius: 6,
+            background: 'rgba(40, 200, 64, 0.2)',
+            border: '1px solid rgba(40, 200, 64, 0.4)',
+            color: '#28c840',
+            fontSize: 11,
+            fontFamily: '"JetBrains Mono", monospace',
+            zIndex: 41,
+          }}
+        >
+          {clipboardToast}
+        </div>
+      )}
 
       <PinnedCommandsStrip commands={pinnedCommands} onExecute={handleKey} />
 
