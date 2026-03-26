@@ -52,6 +52,12 @@ clsh gives you real terminal access to your Mac from your phone. One command, sc
 - Custom keyboard with sticky modifiers, key repeat, and context strip
 - 3-tier tunnel: ngrok → SSH → Wi-Fi (works without any signup)
 - Install as a PWA — fullscreen, no browser chrome
+- **[Push notifications](NOTIFICATIONS.md)** — get alerted when Claude needs input or hits an error
+- **[Session templates](FEATURES.md#session-templates)** — one-tap project shortcuts with custom shells
+- **[Pinned commands](FEATURES.md#pinned-commands)** — quick-access buttons above the keyboard
+- **[Auto-sleep](FEATURES.md#auto-sleep)** — sessions sleep after inactivity, wake on touch
+- **[Cost ticker](FEATURES.md#cost-ticker)** — live Claude session cost on each card
+- **[Clipboard bridge](FEATURES.md#clipboard-bridge)** — copy URLs, code blocks, and output
 
 ## Quickstart
 
