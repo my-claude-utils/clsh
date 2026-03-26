@@ -124,6 +124,7 @@ export async function main(): Promise<void> {
     dbStatements: statements,
     defaultShell: config.defaultShell,
     notificationManager,
+    autoSleep: config.autoSleep,
   })
 
   // 8. Recover sessions from previous server run (tmux sessions survive restarts)

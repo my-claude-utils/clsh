@@ -112,12 +112,18 @@ export interface PTYSession {
   onUpdate: (callback: (meta: SessionMeta) => void) => void
 }
 
+export interface AutoSleepConfig {
+  enabled: boolean
+  timeoutMinutes: number
+}
+
 export interface PTYManagerOptions {
   tmuxEnabled?: boolean
   tmuxConfPath?: string | null
   dbStatements?: DbStatements
   defaultShell: DefaultableShell
   notificationManager?: NotificationManager
+  autoSleep?: AutoSleepConfig
 }
 
 /**
@@ -173,6 +179,10 @@ export class PTYManager {
   private db: DbStatements | null
   private defaultShell: DefaultableShell
   private notifications: NotificationManager | null
+  private autoSleep: AutoSleepConfig
+  /** Tracks the last user input time per session for auto-sleep. */
+  private lastInputAt = new Map<string, number>()
+  private autoSleepCheckInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(options: PTYManagerOptions) {
     this.tmuxEnabled = options.tmuxEnabled ?? false
@@ -180,10 +190,18 @@ export class PTYManager {
     this.db = options.dbStatements ?? null
     this.defaultShell = options.defaultShell
     this.notifications = options.notificationManager ?? null
+    this.autoSleep = options.autoSleep ?? { enabled: false, timeoutMinutes: 30 }
 
     this.idleCheckInterval = setInterval(() => {
       this.checkIdleSessions()
     }, IDLE_CHECK_INTERVAL)
+
+    // Auto-sleep check every 60 seconds
+    if (this.autoSleep.enabled) {
+      this.autoSleepCheckInterval = setInterval(() => {
+        this.checkAutoSleep()
+      }, 60_000)
+    }
   }
 
   /** Checks all sessions and transitions them to idle if no recent activity. */
@@ -194,6 +212,55 @@ export class PTYManager {
         session.status = 'idle'
         this.emitUpdate(session)
       }
+    }
+  }
+
+  /** Checks for sessions that should be auto-slept. */
+  private checkAutoSleep(): void {
+    if (!this.autoSleep.enabled) return
+    const now = Date.now()
+    const timeoutMs = this.autoSleep.timeoutMinutes * 60_000
+
+    for (const session of this.sessions.values()) {
+      // Don't sleep sessions that are active, need attention, or already sleeping
+      if (
+        session.status === 'run' ||
+        session.status === 'attention' ||
+        session.status === 'sleeping'
+      )
+        continue
+      // Only sleep tmux-backed sessions (we need tmux to preserve state)
+      if (!session.tmuxName) continue
+
+      const lastInput = this.lastInputAt.get(session.id) ?? session.lastActivityAt
+      if (now - lastInput >= timeoutMs && now - session.lastActivityAt >= timeoutMs) {
+        this.sleepSession(session)
+      }
+    }
+  }
+
+  /** Put a session to sleep: kill node-pty but keep tmux session alive. */
+  private sleepSession(session: PTYSession): void {
+    if (!session.tmuxName || session.status === 'sleeping') return
+    session.pty.kill()
+    session.status = 'sleeping'
+    this.emitUpdate(session)
+  }
+
+  /** Wake a sleeping session by reattaching to its tmux session. */
+  private wakeSession(session: PTYSession): void {
+    if (!session.tmuxName) return
+
+    // Remove the old session entry and reattach
+    const { id, tmuxName, shell, name, cwd } = session
+    this.sessions.delete(id)
+    this.updateListeners.delete(id)
+    this.notifications?.removeSession(id)
+
+    const reattached = this.reattach(id, tmuxName, shell, name, cwd)
+    if (reattached) {
+      reattached.status = 'idle'
+      this.emitUpdate(reattached)
     }
   }
 
@@ -621,6 +688,15 @@ export class PTYManager {
       throw new Error(`Session not found: ${id}`)
     }
 
+    // Track input time for auto-sleep
+    this.lastInputAt.set(id, Date.now())
+
+    // Wake sleeping sessions on user input
+    if (session.status === 'sleeping' && session.tmuxName) {
+      this.wakeSession(session)
+      return // The write will be re-sent after reattach
+    }
+
     // Clear attention status on user input
     if (session.status === 'attention') {
       session.status = 'run'
@@ -727,6 +803,10 @@ export class PTYManager {
     if (this.idleCheckInterval) {
       clearInterval(this.idleCheckInterval)
       this.idleCheckInterval = null
+    }
+    if (this.autoSleepCheckInterval) {
+      clearInterval(this.autoSleepCheckInterval)
+      this.autoSleepCheckInterval = null
     }
   }
 
