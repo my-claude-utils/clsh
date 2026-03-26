@@ -174,7 +174,7 @@ function handleMessage(
       break
 
     case 'session_create':
-      handleSessionCreate(ws, message.shell, message.name, ptyManager, subscriptions)
+      handleSessionCreate(ws, message.shell, message.name, message.cwd, ptyManager, subscriptions)
       break
 
     case 'session_subscribe':
@@ -207,6 +207,7 @@ function handleSessionCreate(
   ws: WebSocket,
   shell: ShellType | undefined | unknown,
   name: string | undefined,
+  cwd: string | undefined,
   ptyManager: PTYManager,
   subscriptions: SubscriptionMap,
 ): void {
@@ -218,7 +219,7 @@ function handleSessionCreate(
 
   let session: PTYSession
   try {
-    session = ptyManager.create(shell, 80, 24, name)
+    session = ptyManager.create(shell, 80, 24, name, cwd)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : 'Failed to create session'
     sendError(ws, errMsg)

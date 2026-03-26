@@ -329,14 +329,21 @@ export class PTYManager {
    * for session persistence with proper scrollback support.
    * Falls back to raw PTY if tmux is unavailable.
    */
-  create(shell?: ShellType, cols: number = 80, rows: number = 24, name?: string): PTYSession {
+  create(
+    shell?: ShellType,
+    cols: number = 80,
+    rows: number = 24,
+    name?: string,
+    cwd?: string,
+  ): PTYSession {
     const resolvedShell: ShellType = shell ?? this.defaultShell
     if (this.sessions.size >= MAX_SESSIONS) {
       throw new Error(`Session limit reached (max ${MAX_SESSIONS}). Close a session first.`)
     }
 
     const id = randomUUID()
-    const initialCwd = homedir()
+    // Use provided cwd if valid, otherwise home directory
+    const initialCwd = cwd && existsSync(cwd) ? cwd : homedir()
     const wrap = this.shouldWrapInTmux(resolvedShell)
     const tmuxName = wrap ? `clsh-${id}` : null
 

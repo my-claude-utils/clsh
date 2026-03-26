@@ -5,23 +5,24 @@
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
-export type SessionStatus = 'run' | 'idle';
-export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude';
+export type SessionStatus = 'run' | 'idle'
+export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude'
 
 export interface Session {
-  id: string;           // server-assigned UUID
-  name: string;         // display name (cwd basename, e.g. "clsh" or "api-refactor")
-  cwd: string;          // current working directory
-  status: SessionStatus;
-  shell: ShellType;
-  pid: number;
-  preview: string;      // last ~3000 chars of raw ANSI output (converted to HTML in SessionCard)
-  snapshot?: string;    // xterm visible-screen capture taken when leaving the session
+  id: string // server-assigned UUID
+  name: string // display name (cwd basename, e.g. "clsh" or "api-refactor")
+  cwd: string // current working directory
+  status: SessionStatus
+  shell: ShellType
+  pid: number
+  preview: string // last ~3000 chars of raw ANSI output (converted to HTML in SessionCard)
+  snapshot?: string // xterm visible-screen capture taken when leaving the session
+  icon?: string // template icon emoji
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
 
-export type View = 'grid' | 'terminal' | 'skin-studio';
+export type View = 'grid' | 'terminal' | 'skin-studio'
 
 // ── Keyboard Skins ────────────────────────────────────────────────────────────
 
@@ -31,76 +32,76 @@ export type SkinId =
   | 'gamer-rgb'
   | 'custom-painted'
   | 'amber-retro'
-  | 'ice-white';
+  | 'ice-white'
 
 export interface SkinDefinition {
-  id: SkinId;
-  name: string;
-  subtitle: string;
-  vars: SkinVars;
-  animated?: boolean;   // Gamer RGB has CSS animation
+  id: SkinId
+  name: string
+  subtitle: string
+  vars: SkinVars
+  animated?: boolean // Gamer RGB has CSS animation
 }
 
 export interface SkinVars {
-  kbdBg: string;
-  keyFace: string;
-  keyBorder: string;
-  keySide: string;        // shadow/bottom-edge color
-  keyLabel: string;
-  keyLabelShift: string;
-  keyHover: string;
-  keyActive: string;
+  kbdBg: string
+  keyFace: string
+  keyBorder: string
+  keySide: string // shadow/bottom-edge color
+  keyLabel: string
+  keyLabelShift: string
+  keyHover: string
+  keyActive: string
 }
 
 // Per-key color overrides (Custom Painted + user paint mode)
 // Map of keyId → hex color string, stored in localStorage
-export type PerKeyColors = Record<string, string>;
+export type PerKeyColors = Record<string, string>
 
 // ── Component Props ───────────────────────────────────────────────────────────
 
 export interface GridViewProps {
-  sessions: Session[];
-  activeSessionId: string | null;
-  onSessionSelect: (sessionId: string) => void;
-  onCreateSession: () => void;
-  onCloseSession: (sessionId: string) => void;
-  onOpenSettings: () => void;
-  wsStatus: import('./ws-client').ConnectionStatus;
+  sessions: Session[]
+  activeSessionId: string | null
+  onSessionSelect: (sessionId: string) => void
+  onCreateSession: () => void
+  onCloseSession: (sessionId: string) => void
+  onOpenSettings: () => void
+  wsStatus: import('./ws-client').ConnectionStatus
 }
 
 export interface TerminalViewProps {
-  session: Session;
-  wsClient: import('./ws-client').TerminalWSClient | null;
-  messageBus: import('./message-bus').MessageBus;
-  getSessionOutput: (sessionId: string) => string[];
+  session: Session
+  wsClient: import('./ws-client').TerminalWSClient | null
+  messageBus: import('./message-bus').MessageBus
+  getSessionOutput: (sessionId: string) => string[]
   /** Called when user navigates back; snapshot is the xterm screen capture */
-  onBack: (snapshot: string) => void;
-  onOpenSkinStudio: () => void;
-  onOpenSettings: () => void;
+  onBack: (snapshot: string) => void
+  onOpenSkinStudio: () => void
+  onOpenSettings: () => void
   /** Renames the current session */
-  onRenameSession: (sessionId: string, name: string) => void;
-  skin: SkinId;
-  perKeyColors: PerKeyColors;
-  nativeKeyboard: boolean;
+  onRenameSession: (sessionId: string, name: string) => void
+  skin: SkinId
+  perKeyColors: PerKeyColors
+  nativeKeyboard: boolean
 }
 
 export interface MacBookKeyboardProps {
-  onKey: (data: string) => void;    // sends escape sequence or char to terminal
-  skin: SkinId;
-  perKeyColors: PerKeyColors;
-  onOpenSkinStudio?: () => void;
+  onKey: (data: string) => void // sends escape sequence or char to terminal
+  skin: SkinId
+  perKeyColors: PerKeyColors
+  onOpenSkinStudio?: () => void
 }
 
 export interface ContextStripProps {
-  onKey: (data: string) => void;
+  onKey: (data: string) => void
 }
 
 export interface SkinStudioProps {
-  currentSkin: SkinId;
-  onSkinChange: (skin: SkinId) => void;
-  perKeyColors: PerKeyColors;
-  onPerKeyColorChange: (colors: PerKeyColors) => void;
-  onClose: () => void;
-  nativeKeyboard: boolean;
-  onNativeKeyboardChange: (enabled: boolean) => void;
+  currentSkin: SkinId
+  onSkinChange: (skin: SkinId) => void
+  perKeyColors: PerKeyColors
+  onPerKeyColorChange: (colors: PerKeyColors) => void
+  onClose: () => void
+  nativeKeyboard: boolean
+  onNativeKeyboardChange: (enabled: boolean) => void
 }

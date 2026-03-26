@@ -38,6 +38,21 @@ export interface AgentConfig {
   notifications: NotificationConfig
   /** Auth mode configuration. */
   authMode: ResolvedAuth
+  /** Session templates from config. */
+  sessionTemplates: SessionTemplate[]
+  /** Global pinned commands. */
+  pinnedCommands: Array<{ label: string; command: string }>
+  /** Auto-sleep configuration. */
+  autoSleep: { enabled: boolean; timeoutMinutes: number }
+}
+
+/** Session template definition from config. */
+export interface SessionTemplate {
+  name: string
+  directory: string
+  shell: 'bash' | 'zsh' | 'claude'
+  icon: string
+  pinnedCommands?: Array<{ label: string; command: string }>
 }
 
 interface ClshConfigFile {
@@ -46,6 +61,9 @@ interface ClshConfigFile {
   port?: number
   notifications?: Partial<NotificationConfig>
   auth?: AuthConfig
+  sessionTemplates?: SessionTemplate[]
+  pinnedCommands?: Array<{ label: string; command: string }>
+  autoSleep?: { enabled: boolean; timeoutMinutes: number }
 }
 
 /**
@@ -240,5 +258,11 @@ export function loadConfig(): AgentConfig {
     defaultShell,
     notifications,
     authMode: resolveAuthMode(fileConfig.auth),
+    sessionTemplates: fileConfig.sessionTemplates ?? [],
+    pinnedCommands: fileConfig.pinnedCommands ?? [],
+    autoSleep: {
+      enabled: fileConfig.autoSleep?.enabled ?? false,
+      timeoutMinutes: fileConfig.autoSleep?.timeoutMinutes ?? 30,
+    },
   }
 }

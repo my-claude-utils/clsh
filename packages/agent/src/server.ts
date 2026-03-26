@@ -168,6 +168,14 @@ export function createAppServer(config: AgentConfig, statements: DbStatements): 
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
   })
 
+  // Session templates endpoint
+  app.get('/api/templates', (_req, res) => {
+    res.json({
+      templates: config.sessionTemplates ?? [],
+      pinnedCommands: config.pinnedCommands ?? [],
+    })
+  })
+
   // Auth mode endpoint (tells frontend which auth mode is active)
   app.get('/api/auth/mode', (_req, res) => {
     res.json({
