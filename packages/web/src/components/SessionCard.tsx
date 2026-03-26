@@ -144,6 +144,31 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
         />
       </div>
 
+      {/* Cost badge */}
+      {session.cost != null && session.cost > 0 && (
+        <span
+          style={{
+            position: 'absolute',
+            bottom: 6,
+            left: 6,
+            fontSize: 9,
+            fontFamily: 'JetBrains Mono, monospace',
+            fontWeight: 600,
+            padding: '1px 5px',
+            borderRadius: 3,
+            background:
+              session.cost > 5
+                ? 'rgba(239, 68, 68, 0.15)'
+                : session.cost > 1
+                  ? 'rgba(245, 166, 35, 0.15)'
+                  : 'rgba(40, 200, 64, 0.15)',
+            color: session.cost > 5 ? '#ef4444' : session.cost > 1 ? '#f5a623' : '#28c840',
+          }}
+        >
+          ${session.cost.toFixed(2)}
+        </span>
+      )}
+
       {/* Delete button (red X) */}
       <div
         onClick={handleDeleteClick}

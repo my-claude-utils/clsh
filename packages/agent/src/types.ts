@@ -49,6 +49,7 @@ export type ServerMessage =
       name: string
       cwd: string
       status: 'run' | 'idle' | 'attention' | 'sleeping'
+      cost?: number | null
     }
   | { type: 'error'; message: string }
   | { type: 'pong' }

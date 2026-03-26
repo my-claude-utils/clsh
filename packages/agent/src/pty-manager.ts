@@ -7,6 +7,7 @@ import type { ShellType, DefaultableShell } from './types.js'
 import type { DbStatements } from './db.js'
 import type { NotificationManager } from './notifications/manager.js'
 import { stripAnsi } from './notifications/triggers.js'
+import { CostTracker, type SessionCost } from './notifications/cost-tracker.js'
 import {
   tmuxSessionExists,
   killTmuxSession,
@@ -92,6 +93,7 @@ export interface SessionMeta {
   name: string
   cwd: string
   status: SessionStatus
+  cost?: number | null
 }
 
 export interface PTYSession {
@@ -182,6 +184,8 @@ export class PTYManager {
   private autoSleep: AutoSleepConfig
   /** Tracks the last user input time per session for auto-sleep. */
   private lastInputAt = new Map<string, number>()
+  /** Cost trackers per session. */
+  private costTrackers = new Map<string, CostTracker>()
   private autoSleepCheckInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(options: PTYManagerOptions) {
@@ -266,10 +270,12 @@ export class PTYManager {
 
   /** Emits an update event to all update listeners for a session. */
   private emitUpdate(session: PTYSession): void {
+    const cost = this.costTrackers.get(session.id)?.getCost()
     const meta: SessionMeta = {
       name: session.name,
       cwd: session.cwd,
       status: session.status,
+      cost: cost?.totalCost ?? null,
     }
     // Keep notification manager in sync with session name
     this.notifications?.updateSessionName(session.id, session.name)
@@ -313,6 +319,32 @@ export class PTYManager {
     }
   }
 
+  /** Track cost information from PTY output. */
+  private trackCost(session: PTYSession, data: string): void {
+    let tracker = this.costTrackers.get(session.id)
+    if (!tracker) {
+      tracker = new CostTracker()
+      this.costTrackers.set(session.id, tracker)
+    }
+
+    const lines = data.split('\n')
+    let changed = false
+    for (const line of lines) {
+      if (tracker.feedLine(line)) {
+        changed = true
+      }
+    }
+
+    if (changed) {
+      this.emitUpdate(session)
+    }
+  }
+
+  /** Get cost for a session. */
+  getSessionCost(id: string): SessionCost | null {
+    return this.costTrackers.get(id)?.getCost() ?? null
+  }
+
   /** Whether a shell type should be wrapped in tmux. */
   private shouldWrapInTmux(shell: ShellType): boolean {
     return this.tmuxEnabled && TMUX_WRAPPABLE.has(shell)
@@ -351,10 +383,12 @@ export class PTYManager {
     this.notifications?.feedData(session.id, data)
 
     // Check if this output contains attention patterns (permission prompt, error)
-    // Import the trigger detection inline to avoid circular deps
     if (this.notifications?.active) {
       this.checkAttention(session, data)
     }
+
+    // Cost tracking: parse cost lines from output
+    this.trackCost(session, data)
 
     session.buffer.push(data)
     if (session.buffer.length > MAX_BUFFER_SIZE) {

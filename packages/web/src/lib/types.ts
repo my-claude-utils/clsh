@@ -18,6 +18,7 @@ export interface Session {
   preview: string // last ~3000 chars of raw ANSI output (converted to HTML in SessionCard)
   snapshot?: string // xterm visible-screen capture taken when leaving the session
   icon?: string // template icon emoji
+  cost?: number | null // session cost in dollars (from Claude Code output)
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────

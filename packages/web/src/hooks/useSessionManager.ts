@@ -179,7 +179,15 @@ export function useSessionManager(
       case 'session_update': {
         setSessions((prev) =>
           prev.map((s) =>
-            s.id === msg.sessionId ? { ...s, name: msg.name, cwd: msg.cwd, status: msg.status } : s,
+            s.id === msg.sessionId
+              ? {
+                  ...s,
+                  name: msg.name,
+                  cwd: msg.cwd,
+                  status: msg.status,
+                  ...(msg.cost != null ? { cost: msg.cost } : {}),
+                }
+              : s,
           ),
         )
         break
