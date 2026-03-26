@@ -3,6 +3,7 @@ import { useTerminal } from '../hooks/useTerminal'
 import { TitleBar } from './TitleBar'
 import { ContextStrip } from './ContextStrip'
 import { PinnedCommandsStrip, type PinnedCommand } from './PinnedCommandsStrip'
+import { ClipboardBridge, extractLastOutput, stripAnsiForClipboard } from './ClipboardBridge'
 import { MacBookKeyboard } from './MacBookKeyboard'
 import { IOSKeyboard } from './IOSKeyboard'
 import { TerminalAccessoryBar } from './TerminalAccessoryBar'
@@ -141,6 +142,17 @@ export function TerminalView({
         }
         return
       }
+      // Clipboard bridge: copy last output
+      if (data === '__CLIPBOARD__') {
+        const output = getSessionOutput(session.id)
+        if (output.length > 0) {
+          const text = extractLastOutput(output)
+          if (text) {
+            void navigator.clipboard.writeText(text)
+          }
+        }
+        return
+      }
       scrollToBottom()
       wsClient?.send({ type: 'stdin', sessionId: session.id, data })
     },
@@ -191,6 +203,8 @@ export function TerminalView({
           overflow: 'hidden',
         }}
       />
+
+      <ClipboardBridge getOutput={() => getSessionOutput(session.id)} visible={true} />
 
       <PinnedCommandsStrip commands={pinnedCommands} onExecute={handleKey} />
 
