@@ -16,13 +16,14 @@ export interface SessionCost {
  * - "Cost: $0.12 | Tokens: 1,234"
  * - "$1.23 total" (in status lines)
  */
+// More restrictive patterns to avoid false positives on code output.
+// Only match lines that look like Claude Code status output, not arbitrary code.
 const COST_PATTERNS = [
-  /(?:Total\s+cost|Session\s+cost|Cost):\s*\$([0-9]+(?:\.[0-9]+)?)/i,
-  /\$([0-9]+(?:\.[0-9]+)?)\s*(?:total|spent|used)/i,
-  /cost[:\s]+\$([0-9]+(?:\.[0-9]+)?)/i,
+  /(?:Total\s+cost|Session\s+cost):\s*\$([0-9]+(?:\.[0-9]+)?)/i,
+  /^\s*\$([0-9]+\.[0-9]{2})\s+(?:total|spent|used)\b/i,
 ]
 
-const TOKEN_PATTERNS = [/([0-9,]+)\s*tokens?/i, /tokens?[:\s]+([0-9,]+)/i]
+const TOKEN_PATTERNS = [/^\s*([0-9,]+)\s+tokens?\s/i, /(?:Total|Session)\s+tokens?[:\s]+([0-9,]+)/i]
 
 /**
  * Tracks cost information parsed from PTY output for a single session.

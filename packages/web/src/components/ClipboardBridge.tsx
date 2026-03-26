@@ -10,7 +10,10 @@ interface ClipboardBridgeProps {
 /** Strip ANSI escape sequences from a string. */
 function stripAnsi(str: string): string {
   // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[\d;]*[A-Za-z]|[()][AB012]|\x1b)/g, '')
+  return str.replace(
+    /\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[?!>]*[\d;]*[A-Za-z]|[()][AB012]|\x1b)/g,
+    '',
+  )
 }
 
 /** Extract the last output block (everything since the last user prompt). */
@@ -183,5 +186,4 @@ export function ClipboardBridge({ getOutput, visible }: ClipboardBridgeProps) {
   )
 }
 
-export { copyLastOutput as extractLastOutputForCopy }
 export { extractLastOutput, stripAnsi as stripAnsiForClipboard }

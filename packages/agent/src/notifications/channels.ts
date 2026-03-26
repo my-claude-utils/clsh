@@ -118,12 +118,21 @@ export async function sendToChannel(
 ): Promise<void> {
   try {
     const req = buildRequest(channel, payload)
-    await fetch(req.url, {
+    const res = await fetch(req.url, {
       method: req.method,
       headers: req.headers,
       body: req.body,
       signal: AbortSignal.timeout(10_000),
     })
+    if (!res.ok) {
+      process.stderr.write(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          event: 'notification.send.http_error',
+          data: { channel: channel.type, status: res.status },
+        }) + '\n',
+      )
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(

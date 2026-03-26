@@ -6,7 +6,10 @@ import type { TriggerConfig, TriggerType } from './types.js'
  */
 export function stripAnsi(str: string): string {
   // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[\d;]*[A-Za-z]|[()][AB012]|\x1b)/g, '')
+  return str.replace(
+    /\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[?!>]*[\d;]*[A-Za-z]|[()][AB012]|\x1b)/g,
+    '',
+  )
 }
 
 /**

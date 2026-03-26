@@ -19,11 +19,6 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
   }
   const statusColor = statusColors[session.status] ?? '#666'
 
-  const badgeStyle: React.CSSProperties =
-    session.status === 'run'
-      ? { background: 'rgba(0,255,135,0.15)', color: '#f97316' }
-      : { background: 'rgba(100,100,100,0.2)', color: '#666' }
-
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setConfirmDelete(true)

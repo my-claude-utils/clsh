@@ -217,14 +217,9 @@ export function createAppServer(config: AgentConfig, statements: DbStatements): 
           config.jwtSecret,
         )
         statements.insertSession.run(jti, jti, '')
-        // Set httpOnly cookie with 1 year expiry
-        res.cookie('clsh_jwt', jwt, {
-          httpOnly: true,
-          maxAge: 365 * 24 * 60 * 60 * 1000,
-          sameSite: 'lax',
-          path: '/',
-        })
-        res.redirect('/')
+        // Redirect with JWT in hash fragment — useAuth picks this up automatically
+        // Hash fragment is not sent to the server, so the JWT stays client-side
+        res.redirect(`/#token=${jwt}`)
         auditLog('auth.login', { method: 'persistent-link', ip: req.ip })
       } catch (err) {
         console.error('Persistent auth error:', err)

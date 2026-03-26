@@ -31,14 +31,14 @@ export function TemplatePicker({ onSelect, onCancel }: TemplatePickerProps) {
     })()
   }, [])
 
-  if (loading) return null
-
   // If no templates configured, skip picker and create blank session
-  if (templates.length === 0) {
-    // Auto-select blank session
-    onSelect(null)
-    return null
-  }
+  useEffect(() => {
+    if (!loading && templates.length === 0) {
+      onSelect(null)
+    }
+  }, [loading, templates.length, onSelect])
+
+  if (loading || templates.length === 0) return null
 
   return (
     <div

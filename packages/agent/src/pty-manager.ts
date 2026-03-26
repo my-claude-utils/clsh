@@ -252,11 +252,14 @@ export class PTYManager {
   }
 
   /** Wake a sleeping session by reattaching to its tmux session. */
-  private wakeSession(session: PTYSession): void {
-    if (!session.tmuxName) return
+  /** Wake a sleeping session. Returns true if successfully reattached. */
+  private wakeSession(session: PTYSession): boolean {
+    if (!session.tmuxName) return false
 
-    // Remove the old session entry and reattach
+    // Save session info before removing
     const { id, tmuxName, shell, name, cwd } = session
+    // Preserve update listeners so the client still receives events
+    const listeners = this.updateListeners.get(id) ?? []
     this.sessions.delete(id)
     this.updateListeners.delete(id)
     this.notifications?.removeSession(id)
@@ -265,7 +268,15 @@ export class PTYManager {
     if (reattached) {
       reattached.status = 'idle'
       this.emitUpdate(reattached)
+      return true
     }
+
+    // Reattach failed — tmux session is gone. Notify clients via the saved listeners.
+    const exitMeta: SessionMeta = { name, cwd, status: 'idle', cost: null }
+    for (const listener of listeners) {
+      listener(exitMeta)
+    }
+    return false
   }
 
   /** Emits an update event to all update listeners for a session. */
@@ -383,9 +394,8 @@ export class PTYManager {
     this.notifications?.feedData(session.id, data)
 
     // Check if this output contains attention patterns (permission prompt, error)
-    if (this.notifications?.active) {
-      this.checkAttention(session, data)
-    }
+    // Status indicators work independently of notification system
+    this.checkAttention(session, data)
 
     // Cost tracking: parse cost lines from output
     this.trackCost(session, data)
@@ -487,7 +497,9 @@ export class PTYManager {
 
     const id = randomUUID()
     // Use provided cwd if valid, otherwise home directory
-    const initialCwd = cwd && existsSync(cwd) ? cwd : homedir()
+    // Resolve ~ to home directory (tilde expansion is a shell feature, not filesystem)
+    const resolvedCwd = cwd?.startsWith('~') ? cwd.replace(/^~/, homedir()) : cwd
+    const initialCwd = resolvedCwd && existsSync(resolvedCwd) ? resolvedCwd : homedir()
     const wrap = this.shouldWrapInTmux(resolvedShell)
     const tmuxName = wrap ? `clsh-${id}` : null
 
@@ -725,10 +737,21 @@ export class PTYManager {
     // Track input time for auto-sleep
     this.lastInputAt.set(id, Date.now())
 
-    // Wake sleeping sessions on user input
+    // Wake sleeping sessions on user input, then replay the input
     if (session.status === 'sleeping' && session.tmuxName) {
-      this.wakeSession(session)
-      return // The write will be re-sent after reattach
+      const woke = this.wakeSession(session)
+      if (woke) {
+        // Replay the input that triggered the wake after a short delay
+        // to let the tmux session stabilize
+        setTimeout(() => {
+          try {
+            this.write(id, data)
+          } catch {
+            /* session may have died during wake */
+          }
+        }, 500)
+      }
+      return
     }
 
     // Clear attention status on user input
@@ -811,6 +834,8 @@ export class PTYManager {
 
     this.sessions.delete(id)
     this.updateListeners.delete(id)
+    this.costTrackers.delete(id)
+    this.lastInputAt.delete(id)
   }
 
   /** Retrieves a session by ID, or undefined if not found. */
