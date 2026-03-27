@@ -1,4 +1,4 @@
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import ngrok from '@ngrok/ngrok'
 // @ts-expect-error -- qrcode-terminal has no type declarations
@@ -46,20 +46,27 @@ function getLocalIP(): string | null {
 }
 
 /**
- * Gets the Tailscale FQDN for this machine via `tailscale status --json`.
- * Returns null if Tailscale CLI is unavailable or not connected.
+ * Runs a tailscale CLI command with a hard-kill timeout.
+ * Uses SIGKILL to ensure the process dies even if SIGTERM is ignored
+ * (common when tailscaled runs as root and CLI needs elevated access).
  */
+function runTailscaleCmd(args: string[], timeoutMs: number): { ok: boolean; stdout: string } {
+  const result = spawnSync('tailscale', args, {
+    encoding: 'utf-8',
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  return { ok: result.status === 0, stdout: result.stdout ?? '' }
+}
+
 function getTailscaleFQDN(): string | null {
+  const { ok, stdout } = runTailscaleCmd(['status', '--json'], 3_000)
+  if (!ok) return null
   try {
-    const json = execFileSync('tailscale', ['status', '--json'], {
-      encoding: 'utf-8',
-      timeout: 5_000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-    const status = JSON.parse(json) as { Self?: { DNSName?: string } }
+    const status = JSON.parse(stdout) as { Self?: { DNSName?: string } }
     const dnsName = status.Self?.DNSName
     if (!dnsName) return null
-    // Remove trailing dot from DNS name
     return dnsName.replace(/\.$/, '')
   } catch {
     return null
@@ -73,29 +80,24 @@ function getTailscaleFQDN(): string | null {
  * arbitrary ports may not be routed to local services.
  */
 function setupTailscaleServe(port: number): string | null {
+  console.log('  Checking tailscale serve...')
   const fqdn = getTailscaleFQDN()
-  if (!fqdn) return null
-
-  try {
-    // Reset any previous serve config to avoid conflicts
-    execFileSync('tailscale', ['serve', 'reset'], {
-      timeout: 5_000,
-      stdio: 'ignore',
-    })
-  } catch {
-    // OK if nothing to reset
-  }
-
-  try {
-    execFileSync('tailscale', ['serve', '--bg', String(port)], {
-      timeout: 10_000,
-      stdio: 'ignore',
-    })
-    activeTailscaleServe = true
-    return `https://${fqdn}`
-  } catch {
+  if (!fqdn) {
+    console.log('  tailscale serve: could not get FQDN, skipping')
     return null
   }
+
+  // Reset any previous serve config
+  runTailscaleCmd(['serve', 'reset'], 3_000)
+
+  const { ok } = runTailscaleCmd(['serve', '--bg', String(port)], 5_000)
+  if (!ok) {
+    console.log('  tailscale serve: command failed, falling back to raw IP')
+    return null
+  }
+
+  activeTailscaleServe = true
+  return `https://${fqdn}`
 }
 
 /**
@@ -458,11 +460,7 @@ export async function closeTunnel(): Promise<void> {
     activeSSHProcess = null
   }
   if (activeTailscaleServe) {
-    try {
-      execFileSync('tailscale', ['serve', 'reset'], { timeout: 5_000, stdio: 'ignore' })
-    } catch {
-      /* ignore */
-    }
+    runTailscaleCmd(['serve', 'reset'], 3_000)
     activeTailscaleServe = false
   }
   tunnelDead = false
