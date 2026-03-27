@@ -71,13 +71,13 @@ describe('detectTrigger', () => {
   it('detects Claude Code permission prompts - Allow tool use', () => {
     const result = detectTrigger('  Allow tool use? (y/n)', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('permission')
+    expect(result?.trigger).toBe('permission')
   })
 
   it('detects Claude Code permission prompts - Do you want to proceed', () => {
     const result = detectTrigger('Do you want to proceed? (y/n)', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('permission')
+    expect(result?.trigger).toBe('permission')
   })
 
   it('detects Claude Code permission prompts - Allow Read', () => {
@@ -86,7 +86,7 @@ describe('detectTrigger', () => {
       defaultTriggers,
     )
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('permission')
+    expect(result?.trigger).toBe('permission')
   })
 
   it('detects Claude Code permission prompts - Allow Write', () => {
@@ -95,7 +95,7 @@ describe('detectTrigger', () => {
       defaultTriggers,
     )
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('permission')
+    expect(result?.trigger).toBe('permission')
   })
 
   it('detects Claude Code permission prompts - Allow Bash', () => {
@@ -104,37 +104,37 @@ describe('detectTrigger', () => {
       defaultTriggers,
     )
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('permission')
+    expect(result?.trigger).toBe('permission')
   })
 
   it('detects error patterns - ERROR keyword', () => {
     const result = detectTrigger('ERROR: Failed to compile', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects error patterns - FAILED keyword', () => {
     const result = detectTrigger('Build FAILED with 3 errors', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects error patterns - FAIL test result', () => {
     const result = detectTrigger(' FAIL  src/__tests__/auth.test.ts', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects error patterns - [ERROR] bracketed', () => {
     const result = detectTrigger('[ERROR] Connection refused', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects error patterns - Rust/TS error code', () => {
     const result = detectTrigger('error[E0308]: mismatched types', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('does NOT false-positive on ERROR inside code output', () => {
@@ -151,34 +151,34 @@ describe('detectTrigger', () => {
   it('detects error patterns - Python traceback', () => {
     const result = detectTrigger('Traceback (most recent call last):', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects error patterns - error: lowercase with colon', () => {
     const result = detectTrigger('error: Module not found', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects error patterns - cross mark ✗', () => {
     const result = detectTrigger('  ✗ should handle authentication', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('error')
+    expect(result?.trigger).toBe('error')
   })
 
   it('detects custom patterns - NOTIFY keyword', () => {
     const result = detectTrigger('NOTIFY: migration complete', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('custom')
-    expect(result!.label).toBe('Claude')
-    expect(result!.matched).toContain('migration complete')
+    expect(result?.trigger).toBe('custom')
+    expect(result?.label).toBe('Claude')
+    expect(result?.matched).toContain('migration complete')
   })
 
   it('detects custom patterns - test success', () => {
     const result = detectTrigger('✓ All tests passed', defaultTriggers)
     expect(result).not.toBeNull()
-    expect(result!.trigger).toBe('custom')
-    expect(result!.label).toBe('Tests')
+    expect(result?.trigger).toBe('custom')
+    expect(result?.label).toBe('Tests')
   })
 
   it('returns null for normal output', () => {

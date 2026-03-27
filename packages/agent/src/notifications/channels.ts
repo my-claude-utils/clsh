@@ -55,7 +55,7 @@ export function buildPushoverRequest(
 
 /** Escape Telegram Markdown V1 special characters in user content. */
 function escapeTelegramMarkdown(text: string): string {
-  return text.replace(/([_*`\[])/g, '\\$1')
+  return text.replace(/([_*`[])/g, '\\$1')
 }
 
 /** Builds an HTTP request for Telegram. */

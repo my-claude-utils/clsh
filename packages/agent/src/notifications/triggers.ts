@@ -5,8 +5,8 @@ import type { TriggerConfig, TriggerType } from './types.js'
  * Handles SGR, CSI, OSC, and other common terminal sequences.
  */
 export function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
   return str.replace(
+    // eslint-disable-next-line no-control-regex
     /\x1b(?:\][\s\S]*?(?:\x07|\x1b\\)|\[[?!>]*[\d;]*[A-Za-z]|[()][AB012]|\x1b)/g,
     '',
   )

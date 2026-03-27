@@ -271,7 +271,7 @@ export function useAuth(): AuthReturn {
         // Server unreachable — will retry via reconnection
       }
     })()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
+  }, [])
 
   const handleUnauthorized = useCallback(() => {
     // Token rejected by backend (expired or backend restarted with new JWT secret).

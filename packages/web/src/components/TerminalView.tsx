@@ -58,7 +58,7 @@ export function TerminalView({
         // No pinned commands available
       }
     })()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- fetch once on mount
+  }, [])
 
   // Clipboard toast state
   const [clipboardToast, setClipboardToast] = useState<string | null>(null)
