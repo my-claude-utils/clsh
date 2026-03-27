@@ -4,6 +4,10 @@ import { join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import type { DefaultableShell } from './types.js'
+import type { NotificationConfig } from './notifications/types.js'
+import { DEFAULT_NOTIFICATION_CONFIG } from './notifications/types.js'
+import type { AuthConfig, ResolvedAuth } from './auth-config.js'
+import { resolveAuthMode } from './auth-config.js'
 
 export interface AgentConfig {
   port: number
@@ -30,12 +34,36 @@ export interface AgentConfig {
   /** Resolved default shell for new terminal sessions.
    *  Set CLSH_SHELL=bash|zsh to override; otherwise auto-detected at startup. */
   defaultShell: DefaultableShell
+  /** Notification system configuration. */
+  notifications: NotificationConfig
+  /** Auth mode configuration. */
+  authMode: ResolvedAuth
+  /** Session templates from config. */
+  sessionTemplates: SessionTemplate[]
+  /** Global pinned commands. */
+  pinnedCommands: Array<{ label: string; command: string }>
+  /** Auto-sleep configuration. */
+  autoSleep: { enabled: boolean; timeoutMinutes: number }
+}
+
+/** Session template definition from config. */
+export interface SessionTemplate {
+  name: string
+  directory: string
+  shell: 'bash' | 'zsh' | 'claude'
+  icon: string
+  pinnedCommands?: Array<{ label: string; command: string }>
 }
 
 interface ClshConfigFile {
   ngrokAuthtoken?: string
   ngrokStaticDomain?: string
   port?: number
+  notifications?: Partial<NotificationConfig>
+  auth?: AuthConfig
+  sessionTemplates?: SessionTemplate[]
+  pinnedCommands?: Array<{ label: string; command: string }>
+  autoSleep?: { enabled: boolean; timeoutMinutes: number }
 }
 
 /**
@@ -198,6 +226,24 @@ export function loadConfig(): AgentConfig {
   const { shell: defaultShell, source: shellSource } = detectDefaultShell()
   console.log(`  Default shell: ${defaultShell} (${shellSource})`)
 
+  // Merge notification config: defaults ← config file ← --notify flag
+  const notifyFlag = process.argv.includes('--notify')
+  const fileNotif = fileConfig.notifications ?? {}
+  const notifications: NotificationConfig = {
+    ...DEFAULT_NOTIFICATION_CONFIG,
+    ...fileNotif,
+    enabled: notifyFlag || fileNotif.enabled || DEFAULT_NOTIFICATION_CONFIG.enabled,
+    triggers: {
+      ...DEFAULT_NOTIFICATION_CONFIG.triggers,
+      ...(fileNotif.triggers ?? {}),
+      customPatterns: [
+        ...(fileNotif.triggers?.customPatterns ??
+          DEFAULT_NOTIFICATION_CONFIG.triggers.customPatterns),
+      ],
+    },
+    channels: fileNotif.channels ?? DEFAULT_NOTIFICATION_CONFIG.channels,
+  }
+
   return {
     port,
     webPort: parseInt(getEnv('WEB_PORT') ?? String(port), 10),
@@ -210,5 +256,19 @@ export function loadConfig(): AgentConfig {
     tmuxDisabled: getEnv('CLSH_NO_TMUX') === '1',
     noLocalFallback: getEnv('CLSH_NO_LOCAL_FALLBACK') === '1',
     defaultShell,
+    notifications,
+    authMode: resolveAuthMode(fileConfig.auth),
+    sessionTemplates: (fileConfig.sessionTemplates ?? []).filter(
+      (t) =>
+        t &&
+        typeof t.name === 'string' &&
+        typeof t.directory === 'string' &&
+        typeof t.shell === 'string',
+    ),
+    pinnedCommands: fileConfig.pinnedCommands ?? [],
+    autoSleep: {
+      enabled: fileConfig.autoSleep?.enabled ?? false,
+      timeoutMinutes: fileConfig.autoSleep?.timeoutMinutes ?? 30,
+    },
   }
 }

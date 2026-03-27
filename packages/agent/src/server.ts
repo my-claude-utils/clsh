@@ -19,6 +19,7 @@ import type { DbStatements } from './db.js'
 import type { AgentConfig } from './config.js'
 import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from './password.js'
 import { auditLog } from './audit.js'
+import { shouldTrustConnection, shouldSkipBootstrap } from './auth-config.js'
 
 export interface ServerContext {
   app: Express
@@ -166,6 +167,100 @@ export function createAppServer(config: AgentConfig, statements: DbStatements): 
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() })
   })
+
+  // Session templates endpoint (requires auth unless in tailscale mode)
+  app.get('/api/templates', async (req, res) => {
+    if (!shouldTrustConnection(config.authMode)) {
+      const authHeader = req.headers.authorization
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Authorization required' })
+        return
+      }
+      try {
+        await verifySession(authHeader.slice(7), config.jwtSecret, statements)
+      } catch {
+        res.status(401).json({ error: 'Invalid or expired token' })
+        return
+      }
+    }
+    res.json({
+      templates: config.sessionTemplates ?? [],
+      pinnedCommands: config.pinnedCommands ?? [],
+    })
+  })
+
+  // Auth mode endpoint (tells frontend which auth mode is active)
+  app.get('/api/auth/mode', (_req, res) => {
+    res.json({
+      mode: config.authMode.mode,
+      skipBootstrap: shouldSkipBootstrap(config.authMode),
+    })
+  })
+
+  // Tailscale mode: auto-grant JWT on first visit (no token needed)
+  if (shouldTrustConnection(config.authMode)) {
+    app.get('/api/auth/auto', async (_req, res) => {
+      try {
+        const { token: jwt, jti } = await createSessionJWT(
+          { authMethod: 'bootstrap' },
+          config.jwtSecret,
+        )
+        statements.insertSession.run(jti, jti, '')
+        res.json({ token: jwt })
+        auditLog('auth.login', { method: 'tailscale-auto', ip: _req.ip })
+      } catch (err) {
+        console.error('Auto auth error:', err)
+        res.status(500).json({ error: 'Internal server error' })
+      }
+    })
+  }
+
+  // Persistent mode: magic link /auth?token=xxx sets cookie and redirects
+  if (config.authMode.mode === 'persistent' && config.authMode.token) {
+    const staticToken = config.authMode.token
+    app.get('/auth', async (req, res) => {
+      const token = req.query.token as string | undefined
+      if (token !== staticToken) {
+        res.status(401).send('Invalid token')
+        return
+      }
+      try {
+        const { token: jwt, jti } = await createSessionJWT(
+          { authMethod: 'bootstrap' },
+          config.jwtSecret,
+        )
+        statements.insertSession.run(jti, jti, '')
+        // Redirect with JWT in hash fragment — useAuth picks this up automatically
+        // Hash fragment is not sent to the server, so the JWT stays client-side
+        res.redirect(`/#token=${jwt}`)
+        auditLog('auth.login', { method: 'persistent-link', ip: req.ip })
+      } catch (err) {
+        console.error('Persistent auth error:', err)
+        res.status(500).send('Internal server error')
+      }
+    })
+
+    // Also accept the static token via POST for programmatic access
+    app.post('/api/auth/persistent', async (req, res) => {
+      try {
+        const { token } = req.body as { token?: string }
+        if (token !== staticToken) {
+          res.status(401).json({ error: 'Invalid token' })
+          return
+        }
+        const { token: jwt, jti } = await createSessionJWT(
+          { authMethod: 'bootstrap' },
+          config.jwtSecret,
+        )
+        statements.insertSession.run(jti, jti, '')
+        res.json({ token: jwt })
+        auditLog('auth.login', { method: 'persistent', ip: req.ip })
+      } catch (err) {
+        console.error('Persistent auth error:', err)
+        res.status(500).json({ error: 'Internal server error' })
+      }
+    })
+  }
 
   // Auth routes (rate-limited)
   mountAuthRoutes(app, config, statements)

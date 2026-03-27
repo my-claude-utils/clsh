@@ -1,36 +1,42 @@
-import { useState, useCallback } from 'react';
-import type { Session } from '../lib/types';
+import { useState, useCallback } from 'react'
+import type { Session } from '../lib/types'
 
 interface SessionCardProps {
-  session: Session;
-  isActive: boolean;
-  onSelect: (sessionId: string) => void;
-  onClose: (sessionId: string) => void;
+  session: Session
+  isActive: boolean
+  onSelect: (sessionId: string) => void
+  onClose: (sessionId: string) => void
 }
 
 export function SessionCard({ session, isActive, onSelect, onClose }: SessionCardProps) {
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const badgeStyle: React.CSSProperties =
-    session.status === 'run'
-      ? { background: 'rgba(0,255,135,0.15)', color: '#f97316' }
-      : { background: 'rgba(100,100,100,0.2)', color: '#666' };
+  const statusColors: Record<string, string> = {
+    idle: '#28c840', // green
+    run: '#f5a623', // amber
+    attention: '#ef4444', // red
+    sleeping: '#666', // gray
+  }
+  const statusColor = statusColors[session.status] ?? '#666'
 
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmDelete(true);
-  }, []);
+    e.stopPropagation()
+    setConfirmDelete(true)
+  }, [])
 
-  const handleConfirmDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClose(session.id);
-    setConfirmDelete(false);
-  }, [onClose, session.id]);
+  const handleConfirmDelete = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      onClose(session.id)
+      setConfirmDelete(false)
+    },
+    [onClose, session.id],
+  )
 
   const handleCancelDelete = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConfirmDelete(false);
-  }, []);
+    e.stopPropagation()
+    setConfirmDelete(false)
+  }, [])
 
   return (
     <button
@@ -39,9 +45,7 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
       className="relative w-full text-left"
       style={{
         aspectRatio: '1 / 1.18',
-        background: isActive
-          ? 'linear-gradient(135deg, rgba(0,255,135,0.05), #111111)'
-          : '#111111',
+        background: isActive ? 'linear-gradient(135deg, rgba(0,255,135,0.05), #111111)' : '#111111',
         borderRadius: 10,
         border: isActive ? '1px solid #f97316' : '1px solid #222222',
         boxShadow: isActive ? '0 0 0 1px #f97316' : 'none',
@@ -51,10 +55,7 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
       }}
     >
       {/* Header with traffic lights */}
-      <div
-        className="flex items-center gap-1.5 px-2.5"
-        style={{ height: 24, flexShrink: 0 }}
-      >
+      <div className="flex items-center gap-1.5 px-2.5" style={{ height: 24, flexShrink: 0 }}>
         <span
           style={{
             width: 8,
@@ -79,6 +80,7 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
             background: '#28c840',
           }}
         />
+        {session.icon && <span style={{ fontSize: 10, flexShrink: 0 }}>{session.icon}</span>}
         <span
           className="ml-1 truncate"
           style={{
@@ -90,20 +92,18 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
         >
           {session.name}
         </span>
-        {session.status === 'run' && (
-          <span
-            className="flex-shrink-0 rounded px-1"
-            style={{
-              fontSize: 9,
-              fontFamily: 'JetBrains Mono, monospace',
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              ...badgeStyle,
-            }}
-          >
-            RUN
-          </span>
-        )}
+        {/* Status dot */}
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            background: statusColor,
+            flexShrink: 0,
+            animation: session.status === 'attention' ? 'pulse-dot 1.5s infinite' : 'none',
+          }}
+          title={session.status}
+        />
       </div>
 
       {/* Preview body */}
@@ -138,6 +138,31 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
           }}
         />
       </div>
+
+      {/* Cost badge */}
+      {session.cost != null && session.cost > 0 && (
+        <span
+          style={{
+            position: 'absolute',
+            bottom: 6,
+            left: 6,
+            fontSize: 9,
+            fontFamily: 'JetBrains Mono, monospace',
+            fontWeight: 600,
+            padding: '1px 5px',
+            borderRadius: 3,
+            background:
+              session.cost > 5
+                ? 'rgba(239, 68, 68, 0.15)'
+                : session.cost > 1
+                  ? 'rgba(245, 166, 35, 0.15)'
+                  : 'rgba(40, 200, 64, 0.15)',
+            color: session.cost > 5 ? '#ef4444' : session.cost > 1 ? '#f5a623' : '#28c840',
+          }}
+        >
+          ${session.cost.toFixed(2)}
+        </span>
+      )}
 
       {/* Delete button (red X) */}
       <div
@@ -220,5 +245,5 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
         </div>
       )}
     </button>
-  );
+  )
 }

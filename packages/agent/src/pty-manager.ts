@@ -5,6 +5,9 @@ import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import type { ShellType, DefaultableShell } from './types.js'
 import type { DbStatements } from './db.js'
+import type { NotificationManager } from './notifications/manager.js'
+import { stripAnsi } from './notifications/triggers.js'
+import { CostTracker, type SessionCost } from './notifications/cost-tracker.js'
 import {
   tmuxSessionExists,
   killTmuxSession,
@@ -82,11 +85,15 @@ const SHELL_MAP: Record<ShellType, [string, string[]]> = {
 /** Shell types that can be wrapped in tmux for persistence. */
 const TMUX_WRAPPABLE: Set<ShellType> = new Set(['bash', 'zsh', 'claude'])
 
+/** Extended session status for status indicators. */
+export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping'
+
 /** Session metadata passed to update listeners. */
 export interface SessionMeta {
   name: string
   cwd: string
-  status: 'run' | 'idle'
+  status: SessionStatus
+  cost?: number | null
 }
 
 export interface PTYSession {
@@ -96,7 +103,7 @@ export interface PTYSession {
   buffer: string[]
   name: string
   cwd: string
-  status: 'run' | 'idle'
+  status: SessionStatus
   lastActivityAt: number
   /** tmux session name if wrapped, null if raw pty */
   tmuxName: string | null
@@ -107,11 +114,18 @@ export interface PTYSession {
   onUpdate: (callback: (meta: SessionMeta) => void) => void
 }
 
+export interface AutoSleepConfig {
+  enabled: boolean
+  timeoutMinutes: number
+}
+
 export interface PTYManagerOptions {
   tmuxEnabled?: boolean
   tmuxConfPath?: string | null
   dbStatements?: DbStatements
   defaultShell: DefaultableShell
+  notificationManager?: NotificationManager
+  autoSleep?: AutoSleepConfig
 }
 
 /**
@@ -166,16 +180,32 @@ export class PTYManager {
   private tmuxConfPath: string | null
   private db: DbStatements | null
   private defaultShell: DefaultableShell
+  private notifications: NotificationManager | null
+  private autoSleep: AutoSleepConfig
+  /** Tracks the last user input time per session for auto-sleep. */
+  private lastInputAt = new Map<string, number>()
+  /** Cost trackers per session. */
+  private costTrackers = new Map<string, CostTracker>()
+  private autoSleepCheckInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(options: PTYManagerOptions) {
     this.tmuxEnabled = options.tmuxEnabled ?? false
     this.tmuxConfPath = options.tmuxConfPath ?? null
     this.db = options.dbStatements ?? null
     this.defaultShell = options.defaultShell
+    this.notifications = options.notificationManager ?? null
+    this.autoSleep = options.autoSleep ?? { enabled: false, timeoutMinutes: 30 }
 
     this.idleCheckInterval = setInterval(() => {
       this.checkIdleSessions()
     }, IDLE_CHECK_INTERVAL)
+
+    // Auto-sleep check every 60 seconds
+    if (this.autoSleep.enabled) {
+      this.autoSleepCheckInterval = setInterval(() => {
+        this.checkAutoSleep()
+      }, 60_000)
+    }
   }
 
   /** Checks all sessions and transitions them to idle if no recent activity. */
@@ -189,19 +219,141 @@ export class PTYManager {
     }
   }
 
+  /** Checks for sessions that should be auto-slept. */
+  private checkAutoSleep(): void {
+    if (!this.autoSleep.enabled) return
+    const now = Date.now()
+    const timeoutMs = this.autoSleep.timeoutMinutes * 60_000
+
+    for (const session of this.sessions.values()) {
+      // Don't sleep sessions that are active, need attention, or already sleeping
+      if (
+        session.status === 'run' ||
+        session.status === 'attention' ||
+        session.status === 'sleeping'
+      )
+        continue
+      // Only sleep tmux-backed sessions (we need tmux to preserve state)
+      if (!session.tmuxName) continue
+
+      const lastInput = this.lastInputAt.get(session.id) ?? session.lastActivityAt
+      if (now - lastInput >= timeoutMs && now - session.lastActivityAt >= timeoutMs) {
+        this.sleepSession(session)
+      }
+    }
+  }
+
+  /** Put a session to sleep: kill node-pty but keep tmux session alive. */
+  private sleepSession(session: PTYSession): void {
+    if (!session.tmuxName || session.status === 'sleeping') return
+    session.pty.kill()
+    session.status = 'sleeping'
+    this.emitUpdate(session)
+  }
+
+  /** Wake a sleeping session by reattaching to its tmux session. */
+  /** Wake a sleeping session. Returns true if successfully reattached. */
+  private wakeSession(session: PTYSession): boolean {
+    if (!session.tmuxName) return false
+
+    // Save session info before removing
+    const { id, tmuxName, shell, name, cwd } = session
+    // Preserve update listeners so the client still receives events
+    const listeners = this.updateListeners.get(id) ?? []
+    this.sessions.delete(id)
+    this.updateListeners.delete(id)
+    this.notifications?.removeSession(id)
+
+    const reattached = this.reattach(id, tmuxName, shell, name, cwd)
+    if (reattached) {
+      reattached.status = 'idle'
+      this.emitUpdate(reattached)
+      return true
+    }
+
+    // Reattach failed — tmux session is gone. Notify clients via the saved listeners.
+    const exitMeta: SessionMeta = { name, cwd, status: 'idle', cost: null }
+    for (const listener of listeners) {
+      listener(exitMeta)
+    }
+    return false
+  }
+
   /** Emits an update event to all update listeners for a session. */
   private emitUpdate(session: PTYSession): void {
+    const cost = this.costTrackers.get(session.id)?.getCost()
     const meta: SessionMeta = {
       name: session.name,
       cwd: session.cwd,
       status: session.status,
+      cost: cost?.totalCost ?? null,
     }
+    // Keep notification manager in sync with session name
+    this.notifications?.updateSessionName(session.id, session.name)
     const listeners = this.updateListeners.get(session.id)
     if (listeners) {
       for (const listener of listeners) {
         listener(meta)
       }
     }
+  }
+
+  /** Simple attention patterns for status indicators (subset of notification triggers). */
+  private static readonly ATTENTION_PATTERNS = [
+    /Allow\s+\w+.*\?\s*\(Y\)es/i,
+    /Allow\s+tool\s+use/i,
+    /Do you want to proceed\?/i,
+    /\(y\/n\)/i,
+    /Allow\s+(Read|Write|Edit|Bash|Glob|Grep)/,
+    /\bERROR\b/,
+    /\bFAILED\b/,
+    /\bFAIL\b\s/,
+    /Traceback \(most recent call last\)/,
+  ]
+
+  /** Check if output contains attention-worthy patterns. */
+  private checkAttention(session: PTYSession, data: string): void {
+    const stripped = stripAnsi(data)
+    const lines = stripped.split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      for (const pattern of PTYManager.ATTENTION_PATTERNS) {
+        if (pattern.test(trimmed)) {
+          if (session.status !== 'attention') {
+            session.status = 'attention'
+            this.emitUpdate(session)
+          }
+          return
+        }
+      }
+    }
+  }
+
+  /** Track cost information from PTY output. */
+  private trackCost(session: PTYSession, data: string): void {
+    let tracker = this.costTrackers.get(session.id)
+    if (!tracker) {
+      tracker = new CostTracker()
+      this.costTrackers.set(session.id, tracker)
+    }
+
+    const lines = data.split('\n')
+    let changed = false
+    for (const line of lines) {
+      if (tracker.feedLine(line)) {
+        changed = true
+      }
+    }
+
+    if (changed) {
+      this.emitUpdate(session)
+    }
+  }
+
+  /** Get cost for a session. */
+  getSessionCost(id: string): SessionCost | null {
+    return this.costTrackers.get(id)?.getCost() ?? null
   }
 
   /** Whether a shell type should be wrapped in tmux. */
@@ -236,6 +388,17 @@ export class PTYManager {
         }
       }
     }
+
+    // Passive notification tap — feed data to monitor without blocking
+    // Also check for attention-worthy patterns
+    this.notifications?.feedData(session.id, data)
+
+    // Check if this output contains attention patterns (permission prompt, error)
+    // Status indicators work independently of notification system
+    this.checkAttention(session, data)
+
+    // Cost tracking: parse cost lines from output
+    this.trackCost(session, data)
 
     session.buffer.push(data)
     if (session.buffer.length > MAX_BUFFER_SIZE) {
@@ -320,14 +483,23 @@ export class PTYManager {
    * for session persistence with proper scrollback support.
    * Falls back to raw PTY if tmux is unavailable.
    */
-  create(shell?: ShellType, cols: number = 80, rows: number = 24, name?: string): PTYSession {
+  create(
+    shell?: ShellType,
+    cols: number = 80,
+    rows: number = 24,
+    name?: string,
+    cwd?: string,
+  ): PTYSession {
     const resolvedShell: ShellType = shell ?? this.defaultShell
     if (this.sessions.size >= MAX_SESSIONS) {
       throw new Error(`Session limit reached (max ${MAX_SESSIONS}). Close a session first.`)
     }
 
     const id = randomUUID()
-    const initialCwd = homedir()
+    // Use provided cwd if valid, otherwise home directory
+    // Resolve ~ to home directory (tilde expansion is a shell feature, not filesystem)
+    const resolvedCwd = cwd?.startsWith('~') ? cwd.replace(/^~/, homedir()) : cwd
+    const initialCwd = resolvedCwd && existsSync(resolvedCwd) ? resolvedCwd : homedir()
     const wrap = this.shouldWrapInTmux(resolvedShell)
     const tmuxName = wrap ? `clsh-${id}` : null
 
@@ -400,6 +572,9 @@ export class PTYManager {
     }
 
     this.sessions.set(id, session)
+
+    // Register with notification system
+    this.notifications?.addSession(id, session.name)
 
     // Persist to DB for rediscovery
     if (tmuxName && this.db) {
@@ -507,6 +682,7 @@ export class PTYManager {
 
     this.wireControlModeHandlers(session, dataListeners, exitListeners)
     this.sessions.set(sessionId, session)
+    this.notifications?.addSession(sessionId, session.name)
     return session
   }
 
@@ -556,6 +732,32 @@ export class PTYManager {
     const session = this.sessions.get(id)
     if (!session) {
       throw new Error(`Session not found: ${id}`)
+    }
+
+    // Track input time for auto-sleep
+    this.lastInputAt.set(id, Date.now())
+
+    // Wake sleeping sessions on user input, then replay the input
+    if (session.status === 'sleeping' && session.tmuxName) {
+      const woke = this.wakeSession(session)
+      if (woke) {
+        // Replay the input that triggered the wake after a short delay
+        // to let the tmux session stabilize
+        setTimeout(() => {
+          try {
+            this.write(id, data)
+          } catch {
+            /* session may have died during wake */
+          }
+        }, 500)
+      }
+      return
+    }
+
+    // Clear attention status on user input
+    if (session.status === 'attention') {
+      session.status = 'run'
+      this.emitUpdate(session)
     }
 
     if (session.tmuxName) {
@@ -616,6 +818,7 @@ export class PTYManager {
     const session = this.sessions.get(id)
     if (!session) return
 
+    this.notifications?.removeSession(id)
     session.pty.kill()
 
     if (session.tmuxName) {
@@ -631,6 +834,8 @@ export class PTYManager {
 
     this.sessions.delete(id)
     this.updateListeners.delete(id)
+    this.costTrackers.delete(id)
+    this.lastInputAt.delete(id)
   }
 
   /** Retrieves a session by ID, or undefined if not found. */
@@ -658,30 +863,9 @@ export class PTYManager {
       clearInterval(this.idleCheckInterval)
       this.idleCheckInterval = null
     }
-  }
-
-  /**
-   * Full cleanup — kills everything including tmux sessions and DB rows.
-   */
-  destroyAllIncludingTmux(): void {
-    for (const session of this.sessions.values()) {
-      session.pty.kill()
-      if (session.tmuxName) {
-        killTmuxSession(session.tmuxName)
-      }
-    }
-    this.sessions.clear()
-    this.updateListeners.clear()
-    if (this.idleCheckInterval) {
-      clearInterval(this.idleCheckInterval)
-      this.idleCheckInterval = null
-    }
-    if (this.db) {
-      try {
-        this.db.deleteAllPtySessions.run()
-      } catch {
-        /* ignore */
-      }
+    if (this.autoSleepCheckInterval) {
+      clearInterval(this.autoSleepCheckInterval)
+      this.autoSleepCheckInterval = null
     }
   }
 }

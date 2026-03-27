@@ -1,11 +1,11 @@
-import { useCallback } from 'react';
-import type { ContextStripProps } from '../lib/types';
+import { useCallback } from 'react'
+import type { ContextStripProps } from '../lib/types'
 
 interface StripKey {
-  label: string;
-  widthMultiplier: number;
-  data: string;
-  accent?: boolean;
+  label: string
+  widthMultiplier: number
+  data: string
+  accent?: boolean
 }
 
 const STRIP_KEYS: StripKey[] = [
@@ -18,18 +18,19 @@ const STRIP_KEYS: StripKey[] = [
   { label: 'diff', widthMultiplier: 1.5, data: 'git diff\r' },
   { label: 'plan', widthMultiplier: 1.5, data: '/plan ' },
   { label: '====', widthMultiplier: 1.5, data: '\x03' },
-];
+  { label: '\u{1F4CB}', widthMultiplier: 1, data: '__CLIPBOARD__' },
+]
 
-const BASE_WIDTH = 36;
+const BASE_WIDTH = 36
 
 export function ContextStrip({ onKey }: ContextStripProps) {
   const handleTouch = useCallback(
     (data: string) => (e: React.TouchEvent) => {
-      e.preventDefault();
-      onKey(data);
+      e.preventDefault()
+      onKey(data)
     },
     [onKey],
-  );
+  )
 
   return (
     <div
@@ -50,8 +51,8 @@ export function ContextStrip({ onKey }: ContextStripProps) {
           key={key.label}
           onTouchStart={handleTouch(key.data)}
           onMouseDown={(e) => {
-            e.preventDefault();
-            onKey(key.data);
+            e.preventDefault()
+            onKey(key.data)
           }}
           style={{
             height: 28,
@@ -73,5 +74,5 @@ export function ContextStrip({ onKey }: ContextStripProps) {
         </button>
       ))}
     </div>
-  );
+  )
 }

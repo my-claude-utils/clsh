@@ -1,31 +1,31 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react'
 
 export interface AuthState {
-  isAuthenticated: boolean;
-  token: string | null;
-  loading: boolean;
-  error: string | null;
+  isAuthenticated: boolean
+  token: string | null
+  loading: boolean
+  error: string | null
 }
 
 interface AuthReturn {
-  auth: AuthState;
-  authenticateWithBootstrap: (token: string) => Promise<boolean>;
-  authenticateWithPassword: (password: string) => Promise<boolean>;
-  authenticateWithBiometric: (credentialId: string) => Promise<boolean>;
-  logout: () => void;
+  auth: AuthState
+  authenticateWithBootstrap: (token: string) => Promise<boolean>
+  authenticateWithPassword: (password: string) => Promise<boolean>
+  authenticateWithBiometric: (credentialId: string) => Promise<boolean>
+  logout: () => void
   /** Called when the WS closes with code 4001 (token expired/backend restarted) */
-  handleUnauthorized: () => void;
+  handleUnauthorized: () => void
 }
 
-const SESSION_KEY = 'clsh_jwt';
-const STORAGE = localStorage; // persists across PWA close/reopen (sessionStorage did not)
+const SESSION_KEY = 'clsh_jwt'
+const STORAGE = localStorage // persists across PWA close/reopen (sessionStorage did not)
 
 const INITIAL_STATE: AuthState = {
   isAuthenticated: false,
   token: null,
   loading: false,
   error: null,
-};
+}
 
 /**
  * Auth state management hook.
@@ -39,50 +39,50 @@ export function useAuth(): AuthReturn {
   const [auth, setAuth] = useState<AuthState>(() => {
     // Restore JWT from localStorage — survives PWA close/reopen and page refresh
     try {
-      const stored = STORAGE.getItem(SESSION_KEY);
+      const stored = STORAGE.getItem(SESSION_KEY)
       if (stored) {
-        return { isAuthenticated: true, token: stored, loading: false, error: null };
+        return { isAuthenticated: true, token: stored, loading: false, error: null }
       }
     } catch {
       // storage unavailable (private mode, etc.) — ignore
     }
-    return INITIAL_STATE;
-  });
+    return INITIAL_STATE
+  })
 
   const authenticateWithBootstrap = useCallback(
     async (bootstrapToken: string): Promise<boolean> => {
-      setAuth((prev) => ({ ...prev, loading: true, error: null }));
+      setAuth((prev) => ({ ...prev, loading: true, error: null }))
 
       try {
         const response = await fetch('/api/auth/bootstrap', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: bootstrapToken }),
-        });
+        })
 
         if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          const message = body.error ?? `Authentication failed (${String(response.status)})`;
+          const body = (await response.json()) as { error?: string }
+          const message = body.error ?? `Authentication failed (${String(response.status)})`
           setAuth((prev) => ({
             ...prev,
             loading: false,
             error: message,
-          }));
-          return false;
+          }))
+          return false
         }
 
-        const data = (await response.json()) as { token: string };
+        const data = (await response.json()) as { token: string }
 
         setAuth({
           isAuthenticated: true,
           token: data.token,
           loading: false,
           error: null,
-        });
+        })
 
         // Persist JWT so page refresh doesn't force re-auth
         try {
-          STORAGE.setItem(SESSION_KEY, data.token);
+          STORAGE.setItem(SESSION_KEY, data.token)
         } catch {
           // Ignore storage errors
         }
@@ -91,168 +91,205 @@ export function useAuth(): AuthReturn {
         // iOS Safari can throw "The string did not match the expected pattern" on
         // replaceState in standalone PWA mode — don't let that break auth.
         try {
-          const url = new URL(window.location.href);
-          url.searchParams.delete('token');
-          url.hash = '';
-          window.history.replaceState({}, '', url.pathname + url.search);
+          const url = new URL(window.location.href)
+          url.searchParams.delete('token')
+          url.hash = ''
+          window.history.replaceState({}, '', url.pathname + url.search)
         } catch {
           // URL cleanup is cosmetic — auth already succeeded
         }
 
-        return true;
+        return true
       } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : 'Network error';
+        const message = err instanceof Error ? err.message : 'Network error'
         setAuth((prev) => ({
           ...prev,
           loading: false,
           error: message,
-        }));
-        return false;
+        }))
+        return false
       }
     },
     [],
-  );
+  )
 
-  const authenticateWithPassword = useCallback(
-    async (password: string): Promise<boolean> => {
-      setAuth((prev) => ({ ...prev, loading: true, error: null }));
+  const authenticateWithPassword = useCallback(async (password: string): Promise<boolean> => {
+    setAuth((prev) => ({ ...prev, loading: true, error: null }))
+
+    try {
+      const response = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string }
+        const message = body.error ?? `Authentication failed (${String(response.status)})`
+        setAuth((prev) => ({
+          ...prev,
+          loading: false,
+          error: message,
+        }))
+        return false
+      }
+
+      const data = (await response.json()) as { token: string }
+
+      setAuth({
+        isAuthenticated: true,
+        token: data.token,
+        loading: false,
+        error: null,
+      })
 
       try {
-        const response = await fetch('/api/auth/password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password }),
-        });
+        STORAGE.setItem(SESSION_KEY, data.token)
+      } catch {
+        // Ignore storage errors
+      }
 
-        if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          const message = body.error ?? `Authentication failed (${String(response.status)})`;
-          setAuth((prev) => ({
-            ...prev,
-            loading: false,
-            error: message,
-          }));
-          return false;
-        }
+      return true
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network error'
+      setAuth((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }))
+      return false
+    }
+  }, [])
 
-        const data = (await response.json()) as { token: string };
+  const authenticateWithBiometric = useCallback(async (credentialId: string): Promise<boolean> => {
+    setAuth((prev) => ({ ...prev, loading: true, error: null }))
 
-        setAuth({
-          isAuthenticated: true,
-          token: data.token,
-          loading: false,
-          error: null,
-        });
+    try {
+      const response = await fetch('/api/auth/biometric', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credentialId }),
+      })
 
-        try {
-          STORAGE.setItem(SESSION_KEY, data.token);
-        } catch {
-          // Ignore storage errors
-        }
-
-        return true;
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : 'Network error';
+      if (!response.ok) {
+        const body = (await response.json()) as { error?: string }
         setAuth((prev) => ({
           ...prev,
           loading: false,
-          error: message,
-        }));
-        return false;
+          error: body.error ?? 'Authentication failed',
+        }))
+        return false
       }
-    },
-    [],
-  );
 
-  const authenticateWithBiometric = useCallback(
-    async (credentialId: string): Promise<boolean> => {
-      setAuth((prev) => ({ ...prev, loading: true, error: null }));
+      const data = (await response.json()) as { token: string }
+
+      setAuth({
+        isAuthenticated: true,
+        token: data.token,
+        loading: false,
+        error: null,
+      })
 
       try {
-        const response = await fetch('/api/auth/biometric', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credentialId }),
-        });
-
-        if (!response.ok) {
-          const body = (await response.json()) as { error?: string };
-          setAuth((prev) => ({
-            ...prev,
-            loading: false,
-            error: body.error ?? 'Authentication failed',
-          }));
-          return false;
-        }
-
-        const data = (await response.json()) as { token: string };
-
-        setAuth({
-          isAuthenticated: true,
-          token: data.token,
-          loading: false,
-          error: null,
-        });
-
-        try {
-          STORAGE.setItem(SESSION_KEY, data.token);
-        } catch {
-          // Ignore storage errors
-        }
-
-        return true;
-      } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : 'Network error';
-        setAuth((prev) => ({
-          ...prev,
-          loading: false,
-          error: message,
-        }));
-        return false;
+        STORAGE.setItem(SESSION_KEY, data.token)
+      } catch {
+        // Ignore storage errors
       }
-    },
-    [],
-  );
+
+      return true
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network error'
+      setAuth((prev) => ({
+        ...prev,
+        loading: false,
+        error: message,
+      }))
+      return false
+    }
+  }, [])
 
   const logout = useCallback(() => {
     try {
-      STORAGE.removeItem(SESSION_KEY);
+      STORAGE.removeItem(SESSION_KEY)
     } catch {
       // Ignore
     }
-    setAuth(INITIAL_STATE);
-  }, []);
+    setAuth(INITIAL_STATE)
+  }, [])
 
-  // Auto-authenticate from URL #token= hash fragment on mount (H6: token in fragment, not query)
+  // Auto-authenticate from URL token on mount (runs once)
+  const autoAuthRan = useRef(false)
   useEffect(() => {
+    if (autoAuthRan.current) return
+    autoAuthRan.current = true
+
     // Check hash fragment first (new format)
     if (window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.slice(1));
-      const hashToken = hashParams.get('token');
+      const hashParams = new URLSearchParams(window.location.hash.slice(1))
+      const hashToken = hashParams.get('token')
       if (hashToken) {
-        // iOS Safari can throw on replaceState in PWA mode — non-critical
-        try { window.history.replaceState({}, '', window.location.pathname); } catch { /* ignore */ }
-        void authenticateWithBootstrap(hashToken);
-        return;
+        try {
+          window.history.replaceState({}, '', window.location.pathname)
+        } catch {
+          /* iOS Safari PWA — ignore */
+        }
+        void authenticateWithBootstrap(hashToken)
+        return
       }
     }
     // Fallback: check query param (legacy format)
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get('token');
+    const params = new URLSearchParams(window.location.search)
+    const urlToken = params.get('token')
     if (urlToken) {
-      void authenticateWithBootstrap(urlToken);
+      void authenticateWithBootstrap(urlToken)
+      return
     }
-  }, [authenticateWithBootstrap]);
+
+    // If already authenticated from localStorage, skip mode check
+    if (auth.isAuthenticated) return
+
+    // Check server auth mode — auto-authenticate for tailscale mode
+    void (async () => {
+      try {
+        const modeRes = await fetch('/api/auth/mode')
+        if (!modeRes.ok) return
+        const { mode } = (await modeRes.json()) as { mode: string; skipBootstrap: boolean }
+
+        if (mode === 'tailscale') {
+          const autoRes = await fetch('/api/auth/auto')
+          if (autoRes.ok) {
+            const data = (await autoRes.json()) as { token: string }
+            setAuth({ isAuthenticated: true, token: data.token, loading: false, error: null })
+            try {
+              STORAGE.setItem(SESSION_KEY, data.token)
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      } catch {
+        // Server unreachable — will retry via reconnection
+      }
+    })()
+  }, [])
 
   const handleUnauthorized = useCallback(() => {
     // Token rejected by backend (expired or backend restarted with new JWT secret).
     // Clear stored token so the user is shown the auth screen.
-    try { STORAGE.removeItem(SESSION_KEY); } catch { /* ignore */ }
-    setAuth(INITIAL_STATE);
-  }, []);
+    try {
+      STORAGE.removeItem(SESSION_KEY)
+    } catch {
+      /* ignore */
+    }
+    setAuth(INITIAL_STATE)
+  }, [])
 
-  return { auth, authenticateWithBootstrap, authenticateWithPassword, authenticateWithBiometric, logout, handleUnauthorized };
+  return {
+    auth,
+    authenticateWithBootstrap,
+    authenticateWithPassword,
+    authenticateWithBiometric,
+    logout,
+    handleUnauthorized,
+  }
 }

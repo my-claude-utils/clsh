@@ -16,7 +16,7 @@ describe('Finding #1: Biometric auth disabled', () => {
       /app\.get\('\/api\/auth\/password\/status'[\s\S]*?res\.json\(\{([\s\S]*?)\}\)/,
     )
     expect(statusRouteMatch).toBeTruthy()
-    const responseBody = statusRouteMatch![1]
+    const responseBody = (statusRouteMatch as RegExpMatchArray)[1]
     expect(responseBody).not.toContain('credentialId')
     expect(responseBody).not.toContain('userId')
   })

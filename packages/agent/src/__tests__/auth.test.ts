@@ -17,8 +17,8 @@ describe('createSessionJWT', () => {
     const { token } = await createSessionJWT({ authMethod: 'password' }, TEST_SECRET)
     const secretKey = new TextEncoder().encode(TEST_SECRET)
     const { payload } = await jwtVerify(token, secretKey)
-    const iat = payload.iat!
-    const exp = payload.exp!
+    const iat = payload.iat as number
+    const exp = payload.exp as number
     const diffHours = (exp - iat) / 3600
     expect(diffHours).toBe(8)
   })

@@ -21,6 +21,8 @@ import {
 } from './tunnel.js'
 import { isTmuxAvailable, ensureTmuxConfig } from './tmux.js'
 import { checkNetworkPersistence } from './power.js'
+import { NotificationManager } from './notifications/index.js'
+import { shouldSkipBootstrap } from './auth-config.js'
 
 /**
  * Prevents macOS from sleeping while the agent is running.
@@ -80,12 +82,18 @@ export async function main(): Promise<void> {
   // 2. Initialize database
   const { db, statements } = initDatabase(config.dbPath)
 
-  // 3. Generate bootstrap token and store its hash
-  let currentBootstrapToken = generateBootstrapToken()
-  const tokenId = randomUUID()
-  const tokenHash = hashToken(currentBootstrapToken)
-  statements.deleteAllBootstrapTokens.run()
-  statements.insertBootstrapToken.run(tokenId, tokenHash)
+  // 3. Generate bootstrap token and store its hash (skipped in tailscale/persistent modes)
+  const skipBootstrap = shouldSkipBootstrap(config.authMode)
+  let currentBootstrapToken = ''
+  if (!skipBootstrap) {
+    currentBootstrapToken = generateBootstrapToken()
+    const tokenId = randomUUID()
+    const tokenHash = hashToken(currentBootstrapToken)
+    statements.deleteAllBootstrapTokens.run()
+    statements.insertBootstrapToken.run(tokenId, tokenHash)
+  } else {
+    console.log(`  Auth mode: ${config.authMode.mode} (bootstrap/QR disabled)`)
+  }
 
   // 4. tmux session persistence (control mode -CC for scrollback support)
   //    Falls back to raw PTY if tmux is not installed or CLSH_NO_TMUX=1
@@ -102,18 +110,24 @@ export async function main(): Promise<void> {
     console.log('  Session persistence active (tmux control mode)')
   }
 
-  // 5. Create HTTP + WebSocket server
+  // 5. Set up notification system
+  const notificationManager = new NotificationManager(config.notifications)
+  notificationManager.printStatus()
+
+  // 6. Create HTTP + WebSocket server
   const { httpServer, wss } = createAppServer(config, statements)
 
-  // 6. Set up PTY manager and WebSocket handler
+  // 7. Set up PTY manager and WebSocket handler
   const ptyManager = new PTYManager({
     tmuxEnabled,
     tmuxConfPath,
     dbStatements: statements,
     defaultShell: config.defaultShell,
+    notificationManager,
+    autoSleep: config.autoSleep,
   })
 
-  // 7. Recover sessions from previous server run (tmux sessions survive restarts)
+  // 8. Recover sessions from previous server run (tmux sessions survive restarts)
   if (tmuxEnabled) {
     const recovered = ptyManager.rediscoverAll()
     if (recovered.length > 0) {
@@ -121,15 +135,15 @@ export async function main(): Promise<void> {
     }
   }
 
-  setupWebSocketHandler(wss, ptyManager, config.jwtSecret, statements)
+  setupWebSocketHandler(wss, ptyManager, config.jwtSecret, statements, config.authMode)
 
-  // 8. Start HTTP server (auto-finds open port if configured port is busy)
+  // 9. Start HTTP server (auto-finds open port if configured port is busy)
   const actualPort = await startServer(httpServer, config.port)
   if (actualPort !== config.port) {
     console.log(`  Agent running on port ${String(actualPort)} (${String(config.port)} was busy)`)
   }
 
-  // 9. Create tunnel — tries ngrok → SSH (localhost.run) → local network IP
+  // 10. Create tunnel — tries ngrok → SSH (localhost.run) → local network IP
   // If WEB_PORT was explicitly set (dev mode), tunnel to that; otherwise tunnel to the actual agent port
   const tunnelPort = config.webPort !== config.port ? config.webPort : actualPort
   const tunnel = await createTunnel(
@@ -140,20 +154,34 @@ export async function main(): Promise<void> {
     config.noLocalFallback,
   )
 
-  // 10. Set allowed origins for CORS and WebSocket origin checks
+  // 11. Set allowed origins for CORS and WebSocket origin checks
   updateAllowedOrigins(actualPort, tunnel.url, config.webPort)
 
-  // 11. Print clean startup info
-  printAccessInfo(tunnel.url, currentBootstrapToken, tunnel.method)
+  // 12. Print clean startup info
+  if (skipBootstrap) {
+    // Simple URL-only output for tailscale/persistent modes
+    const o = '\x1b[38;5;208m'
+    const r = '\x1b[0m'
+    console.log('')
+    console.log(`${o}  URL: ${r}${tunnel.url}`)
+    if (config.authMode.mode === 'persistent' && config.authMode.token) {
+      console.log(`${o}  Magic link: ${r}${tunnel.url}/auth?token=${config.authMode.token}`)
+    }
+    console.log('')
+  } else {
+    printAccessInfo(tunnel.url, currentBootstrapToken, tunnel.method)
+  }
 
-  // 12. Monitor tunnel health — auto-recovers after sleep/wake or SSH death
+  // 13. Monitor tunnel health — auto-recovers after sleep/wake or SSH death
   const stopTunnelMonitor = startTunnelMonitor((newUrl, method) => {
     // Tunnel was recreated with a (possibly new) URL — reprint access info and update origins
     updateAllowedOrigins(actualPort, newUrl, config.webPort)
-    printAccessInfo(newUrl, currentBootstrapToken, method)
+    if (!skipBootstrap) {
+      printAccessInfo(newUrl, currentBootstrapToken, method)
+    }
   })
 
-  // 13. Listen for Enter key to regenerate QR code with new one-time token.
+  // 14. Listen for Enter key to regenerate QR code with new one-time token.
   //     Works in both TTY mode (npx clsh-dev) and piped mode (turbo / npm run dev).
   try {
     if (process.stdin.setRawMode) process.stdin.setRawMode(true)
@@ -170,25 +198,27 @@ export async function main(): Promise<void> {
     }
     // Enter key: \r in raw mode, \n in line-buffered/piped mode
     if (ch === 13 || ch === 10) {
-      currentBootstrapToken = generateBootstrapToken()
-      const newTokenId = randomUUID()
-      const newTokenHash = hashToken(currentBootstrapToken)
-      statements.deleteAllBootstrapTokens.run()
-      statements.insertBootstrapToken.run(newTokenId, newTokenHash)
-      const tunnelUrl = getTunnelUrl()
-      if (tunnelUrl) {
-        printAccessInfo(tunnelUrl, currentBootstrapToken, tunnel.method)
+      if (!skipBootstrap) {
+        currentBootstrapToken = generateBootstrapToken()
+        const newTokenId = randomUUID()
+        const newTokenHash = hashToken(currentBootstrapToken)
+        statements.deleteAllBootstrapTokens.run()
+        statements.insertBootstrapToken.run(newTokenId, newTokenHash)
+        const tunnelUrl = getTunnelUrl()
+        if (tunnelUrl) {
+          printAccessInfo(tunnelUrl, currentBootstrapToken, tunnel.method)
+        }
       }
     }
   })
-  {
+  if (!skipBootstrap) {
     const dim = '\x1b[2m'
     const r = '\x1b[0m'
     console.log(`${dim}  Press Enter to generate a new QR code${r}`)
     console.log('')
   }
 
-  // 14. Register graceful shutdown handlers
+  // 15. Register graceful shutdown handlers
   registerShutdownHandlers(() => {
     try {
       if (process.stdin.setRawMode) process.stdin.setRawMode(false)
@@ -198,11 +228,19 @@ export async function main(): Promise<void> {
     process.stdin.pause()
     stopCaffeinate?.()
     stopTunnelMonitor()
+    notificationManager.dispose()
     ptyManager.destroyAll() // Kills control clients but leaves tmux sessions alive
     db.close()
     httpServer.close()
   })
 }
+
+// Re-export notification types for CLI consumption
+export type {
+  NotificationConfig,
+  NotificationChannel,
+  NotificationPayload,
+} from './notifications/types.js'
 
 // Auto-run when this file is the direct entry point (e.g. `tsx src/index.ts` or `node dist/index.js`).
 // When imported by the CLI package, CLSH_CLI=1 is set so we skip auto-run.

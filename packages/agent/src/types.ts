@@ -9,7 +9,7 @@ export type ClientMessage =
   | { type: 'auth'; token: string }
   | { type: 'stdin'; sessionId: string; data: string }
   | { type: 'resize'; sessionId: string; cols: number; rows: number }
-  | { type: 'session_create'; shell?: ShellType; name?: string }
+  | { type: 'session_create'; shell?: ShellType; name?: string; cwd?: string }
   | { type: 'session_close'; sessionId: string }
   | { type: 'session_rename'; sessionId: string; name: string }
   | { type: 'session_subscribe'; sessionId: string }
@@ -30,7 +30,7 @@ export type ServerMessage =
       pid: number
       name: string
       cwd: string
-      status: 'run' | 'idle'
+      status: 'run' | 'idle' | 'attention' | 'sleeping'
     }
   | {
       type: 'session_list'
@@ -40,9 +40,16 @@ export type ServerMessage =
         pid: number
         name: string
         cwd: string
-        status: 'run' | 'idle'
+        status: 'run' | 'idle' | 'attention' | 'sleeping'
       }>
     }
-  | { type: 'session_update'; sessionId: string; name: string; cwd: string; status: 'run' | 'idle' }
+  | {
+      type: 'session_update'
+      sessionId: string
+      name: string
+      cwd: string
+      status: 'run' | 'idle' | 'attention' | 'sleeping'
+      cost?: number | null
+    }
   | { type: 'error'; message: string }
   | { type: 'pong' }
