@@ -101,11 +101,14 @@ export function useSessionManager(
     if (!auth.isAuthenticated || !auth.token) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    // In dev mode, connect directly to agent port to bypass Vite's WS proxy
-    // which fails in WSL environments (ECONNRESET)
-    const wsUrl = import.meta.env.DEV
-      ? `ws://${window.location.hostname}:${__DEV_AGENT_PORT__}/ws`
-      : `${protocol}//${window.location.host}/ws`
+    // In dev mode on localhost, connect directly to agent port to bypass Vite's
+    // WS proxy (ECONNRESET in some WSL setups). For remote access (phone via
+    // tunnel), use Vite's /ws proxy since only the Vite port is tunneled.
+    const isLocal = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+    const wsUrl =
+      import.meta.env.DEV && isLocal
+        ? `ws://${window.location.hostname}:${__DEV_AGENT_PORT__}/ws`
+        : `${protocol}//${window.location.host}/ws`
 
     const client = new TerminalWSClient({
       url: wsUrl,
