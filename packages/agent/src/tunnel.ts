@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import ngrok from '@ngrok/ngrok'
 // @ts-expect-error -- qrcode-terminal has no type declarations
@@ -13,6 +13,7 @@ export interface TunnelResult {
 
 let activeNgrokListener: ngrok.Listener | null = null
 let activeSSHProcess: ChildProcess | null = null
+let activeTailscaleServe = false
 
 // Tunnel state for monitoring and recovery
 interface TunnelConfig {
@@ -42,6 +43,59 @@ function getLocalIP(): string | null {
     }
   }
   return null
+}
+
+/**
+ * Gets the Tailscale FQDN for this machine via `tailscale status --json`.
+ * Returns null if Tailscale CLI is unavailable or not connected.
+ */
+function getTailscaleFQDN(): string | null {
+  try {
+    const json = execFileSync('tailscale', ['status', '--json'], {
+      encoding: 'utf-8',
+      timeout: 5_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    const status = JSON.parse(json) as { Self?: { DNSName?: string } }
+    const dnsName = status.Self?.DNSName
+    if (!dnsName) return null
+    // Remove trailing dot from DNS name
+    return dnsName.replace(/\.$/, '')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Exposes a local port via `tailscale serve`, creating an HTTPS reverse proxy
+ * through the Tailscale daemon. More reliable than raw IP access in WSL2 with
+ * userspace networking, where incoming connections to the Tailscale IP on
+ * arbitrary ports may not be routed to local services.
+ */
+function setupTailscaleServe(port: number): string | null {
+  const fqdn = getTailscaleFQDN()
+  if (!fqdn) return null
+
+  try {
+    // Reset any previous serve config to avoid conflicts
+    execFileSync('tailscale', ['serve', 'reset'], {
+      timeout: 5_000,
+      stdio: 'ignore',
+    })
+  } catch {
+    // OK if nothing to reset
+  }
+
+  try {
+    execFileSync('tailscale', ['serve', '--bg', String(port)], {
+      timeout: 10_000,
+      stdio: 'ignore',
+    })
+    activeTailscaleServe = true
+    return `https://${fqdn}`
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -174,7 +228,19 @@ export async function createTunnel(
   }
 
   // 2. Tailscale — E2E encrypted via WireGuard, no third party sees traffic
+  //    Tries `tailscale serve` first (HTTPS reverse proxy through daemon), then
+  //    falls back to raw IP. `tailscale serve` is more reliable in WSL2 with
+  //    userspace networking where raw IP incoming connections may not work.
   if (forcedMethod !== 'ssh' && forcedMethod !== 'local') {
+    // 2a. Try tailscale serve (HTTPS proxy — works with userspace networking)
+    const serveUrl = setupTailscaleServe(port)
+    if (serveUrl) {
+      console.log('  Tailscale serve active (HTTPS proxy)')
+      currentTunnel = { url: serveUrl, method: 'tailscale' }
+      return currentTunnel
+    }
+
+    // 2b. Fall back to raw Tailscale IP
     const tailscaleIP = getTailscaleIP()
     if (tailscaleIP) {
       const url = `http://${tailscaleIP}:${port}`
@@ -390,6 +456,14 @@ export async function closeTunnel(): Promise<void> {
   if (activeSSHProcess) {
     activeSSHProcess.kill()
     activeSSHProcess = null
+  }
+  if (activeTailscaleServe) {
+    try {
+      execFileSync('tailscale', ['serve', 'reset'], { timeout: 5_000, stdio: 'ignore' })
+    } catch {
+      /* ignore */
+    }
+    activeTailscaleServe = false
   }
   tunnelDead = false
 }
