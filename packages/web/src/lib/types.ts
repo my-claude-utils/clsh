@@ -5,7 +5,7 @@
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
-export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping'
+export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping' | 'exited'
 export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude'
 
 export interface Session {
@@ -19,6 +19,9 @@ export interface Session {
   snapshot?: string // xterm visible-screen capture taken when leaving the session
   icon?: string // template icon emoji
   cost?: number | null // session cost in dollars (from Claude Code output)
+  createdAt?: number // unix epoch ms
+  attachedClients?: number // count of WS clients subscribed to this session
+  source?: 'clsh' | 'external' // where the session was created
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────

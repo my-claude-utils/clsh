@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is clsh?
 
-clsh provides real terminal access to your Mac from your phone. It spawns real PTY sessions via node-pty, streams them over WebSocket through a tunnel (ngrok/Tailscale/SSH/Wi-Fi), and renders them in xterm.js. Users scan a QR code to authenticate and can run multiple terminal sessions including Claude Code remotely.
+clsh provides real terminal access from your phone. It spawns real PTY sessions via node-pty, streams them over WebSocket through a tunnel (ngrok/Tailscale/SSH/Wi-Fi), and renders them in xterm.js. Users scan a QR code to authenticate and can run multiple terminal sessions including Claude Code remotely.
+
+## Platform Requirements
+
+clsh requires Unix PTY and tmux. On **Windows**, the agent must run inside **WSL**:
+
+```bash
+wsl                             # Enter WSL
+cd /mnt/d/Dev/clsh              # Navigate to repo (adjust path for your drive)
+npm install                     # Compiles node-pty for Linux
+npm run dev                     # Starts agent + web
+```
+
+The CLI will exit with a warning if run from Windows-native Node.js. Always run from a WSL terminal.
 
 ## Commands
 

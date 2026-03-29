@@ -1,14 +1,16 @@
 import { useState, useCallback } from 'react'
 import type { Session } from '../lib/types'
+import { relativeTime } from '../lib/relative-time'
 
 interface SessionCardProps {
   session: Session
   isActive: boolean
   onSelect: (sessionId: string) => void
   onClose: (sessionId: string) => void
+  onRestart?: (sessionId: string) => void
 }
 
-export function SessionCard({ session, isActive, onSelect, onClose }: SessionCardProps) {
+export function SessionCard({ session, isActive, onSelect, onClose, onRestart }: SessionCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const statusColors: Record<string, string> = {
@@ -16,6 +18,7 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
     run: '#f5a623', // amber
     attention: '#ef4444', // red
     sleeping: '#666', // gray
+    exited: '#555', // dim gray
   }
   const statusColor = statusColors[session.status] ?? '#666'
 
@@ -92,6 +95,37 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
         >
           {session.name}
         </span>
+        {/* External session indicator */}
+        {session.source === 'external' && (
+          <span
+            style={{
+              fontSize: 8,
+              color: '#555',
+              fontFamily: 'JetBrains Mono, monospace',
+              padding: '0 3px',
+              flexShrink: 0,
+            }}
+          >
+            ext
+          </span>
+        )}
+        {/* Attachment badge */}
+        {(session.attachedClients ?? 0) > 1 && (
+          <span
+            style={{
+              fontSize: 8,
+              fontFamily: 'JetBrains Mono, monospace',
+              fontWeight: 600,
+              padding: '0 3px',
+              borderRadius: 3,
+              background: 'rgba(249, 115, 22, 0.15)',
+              color: '#f97316',
+              flexShrink: 0,
+            }}
+          >
+            {session.attachedClients}
+          </span>
+        )}
         {/* Status dot */}
         <span
           style={{
@@ -105,6 +139,24 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
           title={session.status}
         />
       </div>
+
+      {/* Metadata row */}
+      {session.createdAt && (
+        <div
+          className="flex items-center justify-between px-2.5"
+          style={{ height: 14, flexShrink: 0 }}
+        >
+          <span
+            style={{
+              fontSize: 8,
+              color: '#444',
+              fontFamily: 'JetBrains Mono, monospace',
+            }}
+          >
+            {relativeTime(session.createdAt)}
+          </span>
+        </div>
+      )}
 
       {/* Preview body */}
       <div
@@ -184,6 +236,51 @@ export function SessionCard({ session, isActive, onSelect, onClose }: SessionCar
       >
         &#x2715;
       </div>
+
+      {/* Exited session overlay */}
+      {session.status === 'exited' && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 flex flex-col items-center justify-center"
+          style={{
+            background: 'rgba(6,6,6,0.85)',
+            borderRadius: 10,
+            zIndex: 5,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              color: '#666',
+              fontFamily: 'JetBrains Mono, monospace',
+              marginBottom: 8,
+            }}
+          >
+            Exited
+          </span>
+          {onRestart && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRestart(session.id)
+              }}
+              style={{
+                background: 'rgba(249, 115, 22, 0.15)',
+                border: '1px solid #f97316',
+                borderRadius: 4,
+                color: '#f97316',
+                fontSize: 11,
+                fontFamily: 'JetBrains Mono, monospace',
+                padding: '4px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              Restart
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Delete confirmation overlay */}
       {confirmDelete && (

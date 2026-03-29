@@ -16,6 +16,8 @@ export type ClientMessage =
   | { type: 'session_rename'; sessionId: string; name: string }
   | { type: 'session_subscribe'; sessionId: string }
   | { type: 'session_list' }
+  | { type: 'session_restart'; sessionId: string }
+  | { type: 'session_detach'; sessionId: string }
   | { type: 'ping' }
 
 export type ServerMessage =
@@ -31,7 +33,9 @@ export type ServerMessage =
       pid: number
       name: string
       cwd: string
-      status: 'run' | 'idle' | 'attention' | 'sleeping'
+      status: 'run' | 'idle' | 'attention' | 'sleeping' | 'exited'
+      createdAt?: number
+      attachedClients?: number
     }
   | {
       type: 'session_list'
@@ -41,7 +45,9 @@ export type ServerMessage =
         pid: number
         name: string
         cwd: string
-        status: 'run' | 'idle' | 'attention' | 'sleeping'
+        status: 'run' | 'idle' | 'attention' | 'sleeping' | 'exited'
+        createdAt?: number
+        attachedClients?: number
       }>
     }
   | {
@@ -49,8 +55,10 @@ export type ServerMessage =
       sessionId: string
       name: string
       cwd: string
-      status: 'run' | 'idle' | 'attention' | 'sleeping' | 'attention' | 'sleeping'
+      status: 'run' | 'idle' | 'attention' | 'sleeping' | 'exited'
       cost?: number | null
+      attachedClients?: number
     }
+  | { type: 'detached'; sessionId: string }
   | { type: 'error'; message: string }
   | { type: 'pong' }

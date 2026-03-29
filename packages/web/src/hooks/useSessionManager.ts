@@ -32,6 +32,8 @@ export interface UseSessionManagerReturn {
   setSessionSnapshot: (sessionId: string, snapshot: string) => void
   /** Renames a session (client-side only) */
   renameSession: (sessionId: string, name: string) => void
+  /** Restarts an exited session (e.g., Claude that finished or crashed) */
+  restartSession: (sessionId: string) => void
   status: ConnectionStatus
 }
 
@@ -122,10 +124,9 @@ export function useSessionManager(
         setStatus(s)
         if (s === 'connected') {
           client.send({ type: 'session_list' })
-        } else {
-          // Clear stale sessions while disconnected; session_list repopulates on reconnect
-          setSessions([])
         }
+        // Do NOT clear sessions on disconnect — keep stale state visible.
+        // session_list on reconnect will merge with existing state.
       },
       onUnauthorized,
     })
@@ -152,6 +153,8 @@ export function useSessionManager(
           shell: msg.shell as Session['shell'],
           pid: msg.pid,
           preview: '',
+          createdAt: msg.createdAt,
+          attachedClients: msg.attachedClients,
         }
         setSessions((prev) => {
           const exists = prev.find((s) => s.id === msg.sessionId)
@@ -162,16 +165,27 @@ export function useSessionManager(
       }
 
       case 'session_list': {
-        const mapped: Session[] = msg.sessions.map((s) => ({
-          id: s.id,
-          name: s.name,
-          cwd: s.cwd,
-          status: s.status,
-          shell: s.shell as Session['shell'],
-          pid: s.pid,
-          preview: '',
-        }))
-        setSessions(mapped)
+        setSessions((prev) => {
+          // Build a lookup of existing sessions to preserve snapshots/previews
+          const existing = new Map(prev.map((s) => [s.id, s]))
+          return msg.sessions.map((s) => {
+            const old = existing.get(s.id)
+            return {
+              id: s.id,
+              name: s.name,
+              cwd: s.cwd,
+              status: s.status,
+              shell: s.shell as Session['shell'],
+              pid: s.pid,
+              preview: old?.preview ?? '',
+              snapshot: old?.snapshot,
+              icon: old?.icon,
+              cost: old?.cost,
+              createdAt: s.createdAt ?? old?.createdAt,
+              attachedClients: s.attachedClients ?? old?.attachedClients,
+            }
+          })
+        })
         // Re-subscribe to all existing sessions to restore output streaming
         for (const s of msg.sessions) {
           wsClientRef.current?.send({ type: 'session_subscribe', sessionId: s.id })
@@ -189,6 +203,7 @@ export function useSessionManager(
                   cwd: msg.cwd,
                   status: msg.status,
                   ...(msg.cost != null ? { cost: msg.cost } : {}),
+                  ...(msg.attachedClients != null ? { attachedClients: msg.attachedClients } : {}),
                 }
               : s,
           ),
@@ -197,19 +212,48 @@ export function useSessionManager(
       }
 
       case 'exit': {
-        setSessions((prev) => prev.filter((s) => s.id !== msg.sessionId))
-        rawOutputBuffers.current.delete(msg.sessionId)
-        // Cleanup headless terminal
-        const term = headlessTerminals.current.get(msg.sessionId)
-        if (term) {
-          term.dispose()
-          headlessTerminals.current.delete(msg.sessionId)
-        }
-        const timer = snapshotTimers.current.get(msg.sessionId)
-        if (timer) {
-          clearTimeout(timer)
-          snapshotTimers.current.delete(msg.sessionId)
-        }
+        // Check if the session has 'exited' status (tmux remain-on-exit).
+        // If so, the session_update handler already set status='exited' — don't remove it.
+        // Only remove sessions that were explicitly killed (session_close).
+        // Cleanup is done inside the updater to avoid stale closure on `sessions`.
+        setSessions((prev) => {
+          const session = prev.find((s) => s.id === msg.sessionId)
+          if (session?.status === 'exited') return prev // keep exited sessions visible
+
+          // Session is truly gone — cleanup buffers/terminals
+          rawOutputBuffers.current.delete(msg.sessionId)
+          const term = headlessTerminals.current.get(msg.sessionId)
+          if (term) {
+            term.dispose()
+            headlessTerminals.current.delete(msg.sessionId)
+          }
+          const timer = snapshotTimers.current.get(msg.sessionId)
+          if (timer) {
+            clearTimeout(timer)
+            snapshotTimers.current.delete(msg.sessionId)
+          }
+
+          return prev.filter((s) => s.id !== msg.sessionId)
+        })
+        break
+      }
+
+      case 'detached': {
+        // Session was detached (persists in tmux) — remove from UI but keep tmux alive
+        setSessions((prev) => {
+          rawOutputBuffers.current.delete(msg.sessionId)
+          const term = headlessTerminals.current.get(msg.sessionId)
+          if (term) {
+            term.dispose()
+            headlessTerminals.current.delete(msg.sessionId)
+          }
+          const timer = snapshotTimers.current.get(msg.sessionId)
+          if (timer) {
+            clearTimeout(timer)
+            snapshotTimers.current.delete(msg.sessionId)
+          }
+          return prev.filter((s) => s.id !== msg.sessionId)
+        })
         break
       }
 
@@ -270,6 +314,13 @@ export function useSessionManager(
     wsClientRef.current?.send({ type: 'session_rename', sessionId, name })
   }, [])
 
+  const restartSession = useCallback(
+    (sessionId: string): void => {
+      wsClient?.send({ type: 'session_restart', sessionId })
+    },
+    [wsClient],
+  )
+
   return {
     sessions,
     wsClient,
@@ -280,6 +331,7 @@ export function useSessionManager(
     getSessionOutput,
     setSessionSnapshot,
     renameSession,
+    restartSession,
     status,
   }
 }
