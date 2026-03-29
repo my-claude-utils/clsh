@@ -13,7 +13,8 @@ unbind-key C-b
 set -g allow-passthrough on
 set -g default-terminal "xterm-256color"
 set -g mouse off
-set -g history-limit 5000
+set -g history-limit 50000
+set -g remain-on-exit on
 set -g escape-time 0
 set -ga terminal-overrides ",xterm-256color:Tc"
 `
@@ -97,6 +98,80 @@ export function killTmuxSession(name: string): void {
 export function killAllClshTmuxSessions(): void {
   for (const name of listClshTmuxSessions()) {
     killTmuxSession(name)
+  }
+}
+
+/**
+ * Respawns a dead pane in a tmux session (requires remain-on-exit on).
+ * Optionally runs a command in the respawned pane.
+ */
+export function respawnPane(tmuxName: string, command?: string): void {
+  const args = ['-S', TMUX_SOCKET_PATH, 'respawn-pane', '-k', '-t', tmuxName]
+  if (command) {
+    args.push(command)
+  }
+  execFileSync('tmux', args, { stdio: 'ignore' })
+}
+
+/** Rich metadata for a tmux session. */
+export interface TmuxSessionInfo {
+  name: string
+  createdAt: number
+  attachedCount: number
+  lastActivity: number
+  windowCount: number
+  isClshOwned: boolean
+}
+
+/**
+ * Lists ALL tmux sessions on the clsh socket with rich metadata.
+ * Unlike listClshTmuxSessions(), this returns external sessions too.
+ */
+export function listAllTmuxSessions(): TmuxSessionInfo[] {
+  try {
+    const format = [
+      '#{session_name}',
+      '#{session_created}',
+      '#{session_attached}',
+      '#{session_activity}',
+      '#{session_windows}',
+    ].join('|')
+    const output = execFileSync('tmux', ['-S', TMUX_SOCKET_PATH, 'list-sessions', '-F', format], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return output
+      .trim()
+      .split('\n')
+      .filter((line) => line.includes('|'))
+      .map((line) => {
+        const parts = line.split('|')
+        if (parts.length < 5) return null
+        return {
+          name: parts[0],
+          createdAt: parseInt(parts[1], 10),
+          attachedCount: parseInt(parts[2], 10),
+          lastActivity: parseInt(parts[3], 10),
+          windowCount: parseInt(parts[4], 10),
+          isClshOwned: parts[0].startsWith(SESSION_PREFIX),
+        }
+      })
+      .filter((info): info is TmuxSessionInfo => info !== null)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Detaches all tmux clients from a session without killing it.
+ */
+export function detachTmuxClients(tmuxName: string): void {
+  try {
+    execFileSync('tmux', ['-S', TMUX_SOCKET_PATH, 'detach-client', '-s', tmuxName], {
+      stdio: 'ignore',
+    })
+  } catch {
+    // No clients attached or session gone — fine
   }
 }
 

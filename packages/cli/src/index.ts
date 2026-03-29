@@ -4,6 +4,23 @@
 // Prevent the agent from auto-running on import
 process.env['CLSH_CLI'] = '1'
 
+// clsh requires Unix PTY and tmux — on Windows, the agent must run inside WSL
+if (process.platform === 'win32') {
+  console.error(`
+  ⚠  clsh requires Unix PTY and tmux, which are not available on Windows.
+
+  Run clsh from a WSL terminal instead:
+
+    wsl
+    cd /mnt/d/Dev/clsh    # or wherever your repo lives
+    npm install            # compiles node-pty for Linux
+    npm run dev
+
+  This gives you native Unix PTY, tmux session persistence, and Tailscale access.
+`)
+  process.exit(1)
+}
+
 const args = process.argv.slice(2)
 
 if (args[0] === 'setup') {

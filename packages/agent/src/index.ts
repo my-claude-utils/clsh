@@ -67,6 +67,8 @@ function fixNodePtyPermissions(): void {
 }
 
 export async function main(): Promise<void> {
+  console.log('  Starting clsh agent...')
+
   // 0. Fix node-pty spawn-helper permissions (npm/npx can strip +x)
   fixNodePtyPermissions()
 

@@ -12,13 +12,15 @@ import {
   tmuxSessionExists,
   killTmuxSession,
   listClshTmuxSessions,
+  listAllTmuxSessions,
   capturePaneContent,
+  respawnPane,
   TMUX_SOCKET_PATH,
 } from './tmux.js'
 import { ControlModeLineBuffer, buildSendKeysCommands } from './control-mode-parser.js'
 
 /** Maximum number of buffer entries retained per session for reconnection replay. */
-const MAX_BUFFER_SIZE = 10_000
+const MAX_BUFFER_SIZE = 50_000
 
 /** Maximum concurrent PTY sessions (H4). */
 const MAX_SESSIONS = 8
@@ -86,7 +88,7 @@ const SHELL_MAP: Record<ShellType, [string, string[]]> = {
 const TMUX_WRAPPABLE: Set<ShellType> = new Set(['bash', 'zsh', 'claude'])
 
 /** Extended session status for status indicators. */
-export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping'
+export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping' | 'exited'
 
 /** Session metadata passed to update listeners. */
 export interface SessionMeta {
@@ -94,6 +96,7 @@ export interface SessionMeta {
   cwd: string
   status: SessionStatus
   cost?: number | null
+  attachedClients: number
 }
 
 export interface PTYSession {
@@ -109,9 +112,13 @@ export interface PTYSession {
   tmuxName: string | null
   /** Whether the user has explicitly renamed this session (suppresses OSC 7 name updates). */
   userRenamed: boolean
-  onData: (callback: (data: string) => void) => void
-  onExit: (callback: (event: { exitCode: number; signal?: number }) => void) => void
-  onUpdate: (callback: (meta: SessionMeta) => void) => void
+  /** Timestamp when this session was created. */
+  createdAt: number
+  /** Number of WebSocket clients currently subscribed to this session. */
+  attachedClients: number
+  onData: (callback: (data: string) => void) => () => void
+  onExit: (callback: (event: { exitCode: number; signal?: number }) => void) => () => void
+  onUpdate: (callback: (meta: SessionMeta) => void) => () => void
 }
 
 export interface AutoSleepConfig {
@@ -187,6 +194,8 @@ export class PTYManager {
   /** Cost trackers per session. */
   private costTrackers = new Map<string, CostTracker>()
   private autoSleepCheckInterval: ReturnType<typeof setInterval> | null = null
+  /** Sessions marked for detach — exit handler skips tmux/DB cleanup for these. */
+  private detachingIds = new Set<string>()
 
   constructor(options: PTYManagerOptions) {
     this.tmuxEnabled = options.tmuxEnabled ?? false
@@ -272,7 +281,7 @@ export class PTYManager {
     }
 
     // Reattach failed — tmux session is gone. Notify clients via the saved listeners.
-    const exitMeta: SessionMeta = { name, cwd, status: 'idle', cost: null }
+    const exitMeta: SessionMeta = { name, cwd, status: 'idle', cost: null, attachedClients: 0 }
     for (const listener of listeners) {
       listener(exitMeta)
     }
@@ -287,6 +296,7 @@ export class PTYManager {
       cwd: session.cwd,
       status: session.status,
       cost: cost?.totalCost ?? null,
+      attachedClients: session.attachedClients,
     }
     // Keep notification manager in sync with session name
     this.notifications?.updateSessionName(session.id, session.name)
@@ -459,18 +469,38 @@ export class PTYManager {
     })
 
     session.pty.onExit((event: { exitCode: number; signal?: number }) => {
+      // If detaching or shutting down, skip tmux cleanup — session persists
+      if (this.detachingIds.has(session.id)) {
+        this.detachingIds.delete(session.id)
+        this.sessions.delete(session.id)
+        this.updateListeners.delete(session.id)
+        for (const listener of exitListeners) {
+          listener(event)
+        }
+        return
+      }
+
+      if (this.shuttingDown) {
+        this.sessions.delete(session.id)
+        this.updateListeners.delete(session.id)
+        for (const listener of exitListeners) {
+          listener(event)
+        }
+        return
+      }
+
+      if (session.tmuxName) {
+        // tmux session has remain-on-exit on — the pane stays alive.
+        // Transition to 'exited' status instead of destroying.
+        session.status = 'exited'
+        this.emitUpdate(session)
+        // Do NOT delete session from map or DB — it can be restarted
+        return
+      }
+
+      // Raw (non-tmux) sessions: clean up normally
       for (const listener of exitListeners) {
         listener(event)
-      }
-      if (session.tmuxName && !this.shuttingDown) {
-        killTmuxSession(session.tmuxName)
-        if (this.db) {
-          try {
-            this.db.deletePtySession.run(session.id)
-          } catch {
-            /* ignore */
-          }
-        }
       }
       this.sessions.delete(session.id)
       this.updateListeners.delete(session.id)
@@ -547,21 +577,39 @@ export class PTYManager {
       shell: resolvedShell,
       pty,
       buffer,
-      name: name ?? resolvedShell,
+      name:
+        name ?? (resolvedShell === 'claude' ? `claude: ${basename(initialCwd)}` : resolvedShell),
       cwd: initialCwd,
       status: 'idle',
       lastActivityAt: Date.now(),
+      createdAt: Date.now(),
+      attachedClients: 0,
       tmuxName,
       userRenamed: !!name,
       onData: (callback) => {
         dataListeners.push(callback)
+        return () => {
+          const idx = dataListeners.indexOf(callback)
+          if (idx !== -1) dataListeners.splice(idx, 1)
+        }
       },
       onExit: (callback) => {
         exitListeners.push(callback)
+        return () => {
+          const idx = exitListeners.indexOf(callback)
+          if (idx !== -1) exitListeners.splice(idx, 1)
+        }
       },
       onUpdate: (callback) => {
         const listeners = this.updateListeners.get(id)
         if (listeners) listeners.push(callback)
+        return () => {
+          const arr = this.updateListeners.get(id)
+          if (arr) {
+            const idx = arr.indexOf(callback)
+            if (idx !== -1) arr.splice(idx, 1)
+          }
+        }
       },
     }
 
@@ -666,17 +714,34 @@ export class PTYManager {
       cwd: savedCwd || homedir(),
       status: 'idle',
       lastActivityAt: Date.now(),
+      createdAt: Date.now(),
+      attachedClients: 0,
       tmuxName,
       userRenamed: false,
       onData: (callback) => {
         dataListeners.push(callback)
+        return () => {
+          const idx = dataListeners.indexOf(callback)
+          if (idx !== -1) dataListeners.splice(idx, 1)
+        }
       },
       onExit: (callback) => {
         exitListeners.push(callback)
+        return () => {
+          const idx = exitListeners.indexOf(callback)
+          if (idx !== -1) exitListeners.splice(idx, 1)
+        }
       },
       onUpdate: (callback) => {
         const listeners = this.updateListeners.get(sessionId)
         if (listeners) listeners.push(callback)
+        return () => {
+          const arr = this.updateListeners.get(sessionId)
+          if (arr) {
+            const idx = arr.indexOf(callback)
+            if (idx !== -1) arr.splice(idx, 1)
+          }
+        }
       },
     }
 
@@ -836,6 +901,135 @@ export class PTYManager {
     this.updateListeners.delete(id)
     this.costTrackers.delete(id)
     this.lastInputAt.delete(id)
+  }
+
+  /**
+   * Restarts an exited tmux session by respawning the pane.
+   * Only works for tmux-backed sessions in 'exited' status.
+   * Reattaches via control mode after respawn.
+   */
+  restartSession(id: string): PTYSession | null {
+    const session = this.sessions.get(id)
+    if (!session || !session.tmuxName || session.status !== 'exited') return null
+
+    const { tmuxName, shell, name, cwd } = session
+    // Respawn the dead pane with the original shell
+    const [cmd, cmdArgs] = SHELL_MAP[shell]
+    const command = [cmd, ...cmdArgs].join(' ')
+    try {
+      respawnPane(tmuxName, command)
+    } catch (err) {
+      throw new Error(
+        `Failed to respawn tmux pane ${tmuxName}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+
+    // Remove old session and reattach fresh
+    this.sessions.delete(id)
+    this.updateListeners.delete(id)
+    return this.reattach(id, tmuxName, shell, name, cwd)
+  }
+
+  /**
+   * Detaches from a tmux session without killing it.
+   * Kills the node-pty control-mode client but leaves the tmux session alive.
+   * The session can be reattached later via rediscoverAll() or explicit reattach.
+   */
+  detach(id: string): void {
+    const session = this.sessions.get(id)
+    if (!session || !session.tmuxName) return
+
+    this.detachingIds.add(id)
+    session.pty.kill()
+    // Session removal happens in the exit handler via detachingIds check
+    // DB row is intentionally preserved for rediscovery
+  }
+
+  /** Increments the attached client count and broadcasts the update. */
+  incrementAttached(id: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.attachedClients++
+    this.emitUpdate(session)
+  }
+
+  /** Decrements the attached client count and broadcasts the update. */
+  decrementAttached(id: string): void {
+    const session = this.sessions.get(id)
+    if (!session) return
+    session.attachedClients = Math.max(0, session.attachedClients - 1)
+    this.emitUpdate(session)
+  }
+
+  /** Returns all sessions merged with tmux metadata, including external sessions. */
+  listRich(): Array<{
+    id: string | null
+    tmuxName: string
+    name: string
+    shell: string | null
+    cwd: string
+    status: SessionStatus | 'external'
+    createdAt: number
+    lastActivity: number
+    attachedClients: number
+    windowCount: number
+    source: 'clsh' | 'external'
+  }> {
+    const tmuxSessions = listAllTmuxSessions()
+    const managedTmuxNames = new Set<string>()
+
+    // Build rich info for clsh-managed sessions
+    const results: Array<{
+      id: string | null
+      tmuxName: string
+      name: string
+      shell: string | null
+      cwd: string
+      status: SessionStatus | 'external'
+      createdAt: number
+      lastActivity: number
+      attachedClients: number
+      windowCount: number
+      source: 'clsh' | 'external'
+    }> = []
+
+    for (const session of this.sessions.values()) {
+      if (session.tmuxName) managedTmuxNames.add(session.tmuxName)
+      const tmuxInfo = tmuxSessions.find((t) => t.name === session.tmuxName)
+      results.push({
+        id: session.id,
+        tmuxName: session.tmuxName ?? `raw-${session.id}`,
+        name: session.name,
+        shell: session.shell,
+        cwd: session.cwd,
+        status: session.status,
+        createdAt: session.createdAt,
+        lastActivity: tmuxInfo?.lastActivity ?? session.lastActivityAt,
+        attachedClients: session.attachedClients,
+        windowCount: tmuxInfo?.windowCount ?? 1,
+        source: 'clsh',
+      })
+    }
+
+    // Add external tmux sessions (not managed by clsh)
+    for (const tmux of tmuxSessions) {
+      if (managedTmuxNames.has(tmux.name)) continue
+      results.push({
+        id: null,
+        tmuxName: tmux.name,
+        name: tmux.name,
+        shell: null,
+        cwd: '',
+        status: 'external',
+        createdAt: tmux.createdAt * 1000,
+        lastActivity: tmux.lastActivity * 1000,
+        attachedClients: tmux.attachedCount,
+        windowCount: tmux.windowCount,
+        source: 'external',
+      })
+    }
+
+    return results
   }
 
   /** Retrieves a session by ID, or undefined if not found. */

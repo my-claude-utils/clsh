@@ -20,6 +20,9 @@ const MAX_STDIN_SIZE = 4096
 /** Subscriptions map: which sessions each WebSocket client is subscribed to. */
 type SubscriptionMap = Map<WebSocket, Set<string>>
 
+/** Disposables map: unsubscribe functions for session callbacks per WebSocket client. */
+type DisposableMap = Map<WebSocket, Array<() => void>>
+
 function send(ws: WebSocket, message: ServerMessage): void {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(message))
@@ -59,9 +62,19 @@ export function setupWebSocketHandler(
   authMode?: ResolvedAuth,
 ): void {
   const subscriptions: SubscriptionMap = new Map()
+  const disposables: DisposableMap = new Map()
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    void handleConnection(ws, req, ptyManager, jwtSecret, statements, subscriptions, authMode)
+    void handleConnection(
+      ws,
+      req,
+      ptyManager,
+      jwtSecret,
+      statements,
+      subscriptions,
+      disposables,
+      authMode,
+    )
   })
 }
 
@@ -72,13 +85,14 @@ async function handleConnection(
   jwtSecret: string,
   statements: DbStatements,
   subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
   authMode?: ResolvedAuth,
 ): Promise<void> {
   // Tailscale mode: skip auth entirely — trust the network
   if (authMode?.mode === 'tailscale') {
     send(ws, { type: 'auth_ok' })
     auditLog('ws.connected', { ip: _req.socket.remoteAddress, authSkipped: true })
-    setupAuthenticatedHandlers(ws, ptyManager, subscriptions)
+    setupAuthenticatedHandlers(ws, ptyManager, subscriptions, disposables)
     return
   }
 
@@ -122,18 +136,42 @@ async function handleConnection(
       // Authentication succeeded
       send(ws, { type: 'auth_ok' })
       auditLog('ws.connected', { ip: _req.socket.remoteAddress })
-      setupAuthenticatedHandlers(ws, ptyManager, subscriptions)
+      setupAuthenticatedHandlers(ws, ptyManager, subscriptions, disposables)
     })()
   })
 
   ws.on('close', () => {
     clearTimeout(authTimeout)
+    // Decrement attached count for all sessions this client was subscribed to
+    const subs = subscriptions.get(ws)
+    if (subs) {
+      for (const sessionId of subs) {
+        ptyManager.decrementAttached(sessionId)
+      }
+    }
+    // Clean up all session callback subscriptions for this WS client
+    const wsDisposables = disposables.get(ws)
+    if (wsDisposables) {
+      for (const dispose of wsDisposables) dispose()
+      disposables.delete(ws)
+    }
     subscriptions.delete(ws)
     auditLog('ws.disconnected', { ip: _req.socket.remoteAddress })
   })
 
   ws.on('error', () => {
     clearTimeout(authTimeout)
+    const subs = subscriptions.get(ws)
+    if (subs) {
+      for (const sessionId of subs) {
+        ptyManager.decrementAttached(sessionId)
+      }
+    }
+    const wsDisposables = disposables.get(ws)
+    if (wsDisposables) {
+      for (const dispose of wsDisposables) dispose()
+      disposables.delete(ws)
+    }
     subscriptions.delete(ws)
   })
 }
@@ -142,6 +180,7 @@ function setupAuthenticatedHandlers(
   ws: WebSocket,
   ptyManager: PTYManager,
   subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
 ): void {
   ;(ws as unknown as { isAlive: boolean }).isAlive = true
   ws.on('pong', () => {
@@ -158,7 +197,7 @@ function setupAuthenticatedHandlers(
       return
     }
 
-    handleMessage(ws, message, ptyManager, subscriptions)
+    handleMessage(ws, message, ptyManager, subscriptions, disposables)
   })
 }
 
@@ -167,6 +206,7 @@ function handleMessage(
   message: ClientMessage,
   ptyManager: PTYManager,
   subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
 ): void {
   switch (message.type) {
     case 'ping':
@@ -174,11 +214,19 @@ function handleMessage(
       break
 
     case 'session_create':
-      handleSessionCreate(ws, message.shell, message.name, message.cwd, ptyManager, subscriptions)
+      handleSessionCreate(
+        ws,
+        message.shell,
+        message.name,
+        message.cwd,
+        ptyManager,
+        subscriptions,
+        disposables,
+      )
       break
 
     case 'session_subscribe':
-      handleSessionSubscribe(ws, message.sessionId, ptyManager, subscriptions)
+      handleSessionSubscribe(ws, message.sessionId, ptyManager, subscriptions, disposables)
       break
 
     case 'session_close':
@@ -191,6 +239,14 @@ function handleMessage(
 
     case 'session_list':
       handleSessionList(ws, ptyManager)
+      break
+
+    case 'session_restart':
+      handleSessionRestart(ws, message.sessionId, ptyManager, subscriptions, disposables)
+      break
+
+    case 'session_detach':
+      handleSessionDetach(ws, message.sessionId, ptyManager, subscriptions)
       break
 
     case 'stdin':
@@ -210,6 +266,7 @@ function handleSessionCreate(
   cwd: string | undefined,
   ptyManager: PTYManager,
   subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
 ): void {
   // If shell is provided, validate it; if omitted, PTYManager uses its defaultShell
   if (shell !== undefined && !isValidShell(shell)) {
@@ -231,6 +288,7 @@ function handleSessionCreate(
   if (clientSubs) {
     clientSubs.add(session.id)
   }
+  ptyManager.incrementAttached(session.id)
 
   // Send session info back to client
   send(ws, {
@@ -249,35 +307,44 @@ function handleSessionCreate(
   }
 
   // Stream PTY output to this WebSocket client
-  session.onData((data: string) => {
-    const subs = subscriptions.get(ws)
-    if (subs?.has(session.id)) {
-      send(ws, { type: 'stdout', sessionId: session.id, data })
-    }
-  })
+  const wsDisposables = disposables.get(ws) ?? []
+  disposables.set(ws, wsDisposables)
+
+  wsDisposables.push(
+    session.onData((data: string) => {
+      const subs = subscriptions.get(ws)
+      if (subs?.has(session.id)) {
+        send(ws, { type: 'stdout', sessionId: session.id, data })
+      }
+    }),
+  )
 
   // Stream session metadata updates to this WebSocket client
-  session.onUpdate((meta) => {
-    const subs = subscriptions.get(ws)
-    if (subs?.has(session.id)) {
-      send(ws, { type: 'session_update', sessionId: session.id, ...meta })
-    }
-  })
+  wsDisposables.push(
+    session.onUpdate((meta) => {
+      const subs = subscriptions.get(ws)
+      if (subs?.has(session.id)) {
+        send(ws, { type: 'session_update', sessionId: session.id, ...meta })
+      }
+    }),
+  )
 
   // Notify client when the session exits
-  session.onExit((event) => {
-    send(ws, {
-      type: 'exit',
-      sessionId: session.id,
-      exitCode: event.exitCode,
-      signal: event.signal,
-    })
+  wsDisposables.push(
+    session.onExit((event) => {
+      send(ws, {
+        type: 'exit',
+        sessionId: session.id,
+        exitCode: event.exitCode,
+        signal: event.signal,
+      })
 
-    const subs = subscriptions.get(ws)
-    if (subs) {
-      subs.delete(session.id)
-    }
-  })
+      const subs = subscriptions.get(ws)
+      if (subs) {
+        subs.delete(session.id)
+      }
+    }),
+  )
 }
 
 function handleSessionSubscribe(
@@ -285,6 +352,7 @@ function handleSessionSubscribe(
   sessionId: string,
   ptyManager: PTYManager,
   subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
 ): void {
   const session = ptyManager.get(sessionId)
   if (!session) {
@@ -298,6 +366,7 @@ function handleSessionSubscribe(
     if (clientSubs.has(sessionId)) return // already subscribed
     clientSubs.add(sessionId)
   }
+  ptyManager.incrementAttached(sessionId)
 
   // Send session info
   send(ws, {
@@ -316,32 +385,41 @@ function handleSessionSubscribe(
   }
 
   // Wire up live streaming
-  session.onData((data: string) => {
-    const subs = subscriptions.get(ws)
-    if (subs?.has(session.id)) {
-      send(ws, { type: 'stdout', sessionId: session.id, data })
-    }
-  })
+  const wsDisposables = disposables.get(ws) ?? []
+  disposables.set(ws, wsDisposables)
 
-  session.onUpdate((meta) => {
-    const subs = subscriptions.get(ws)
-    if (subs?.has(session.id)) {
-      send(ws, { type: 'session_update', sessionId: session.id, ...meta })
-    }
-  })
+  wsDisposables.push(
+    session.onData((data: string) => {
+      const subs = subscriptions.get(ws)
+      if (subs?.has(session.id)) {
+        send(ws, { type: 'stdout', sessionId: session.id, data })
+      }
+    }),
+  )
 
-  session.onExit((event) => {
-    send(ws, {
-      type: 'exit',
-      sessionId: session.id,
-      exitCode: event.exitCode,
-      signal: event.signal,
-    })
-    const subs = subscriptions.get(ws)
-    if (subs) {
-      subs.delete(session.id)
-    }
-  })
+  wsDisposables.push(
+    session.onUpdate((meta) => {
+      const subs = subscriptions.get(ws)
+      if (subs?.has(session.id)) {
+        send(ws, { type: 'session_update', sessionId: session.id, ...meta })
+      }
+    }),
+  )
+
+  wsDisposables.push(
+    session.onExit((event) => {
+      send(ws, {
+        type: 'exit',
+        sessionId: session.id,
+        exitCode: event.exitCode,
+        signal: event.signal,
+      })
+      const subs = subscriptions.get(ws)
+      if (subs) {
+        subs.delete(session.id)
+      }
+    }),
+  )
 }
 
 function handleSessionClose(
@@ -366,9 +444,50 @@ function handleSessionList(ws: WebSocket, ptyManager: PTYManager): void {
     name: s.name,
     cwd: s.cwd,
     status: s.status,
+    createdAt: s.createdAt,
+    attachedClients: s.attachedClients,
   }))
 
   send(ws, { type: 'session_list', sessions })
+}
+
+function handleSessionRestart(
+  ws: WebSocket,
+  sessionId: string,
+  ptyManager: PTYManager,
+  subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
+): void {
+  try {
+    const restarted = ptyManager.restartSession(sessionId)
+    if (!restarted) {
+      sendError(ws, 'Cannot restart session — not in exited state or not found')
+      return
+    }
+    // Auto-subscribe to the restarted session
+    handleSessionSubscribe(ws, sessionId, ptyManager, subscriptions, disposables)
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'Restart failed'
+    sendError(ws, errMsg)
+  }
+}
+
+function handleSessionDetach(
+  ws: WebSocket,
+  sessionId: string,
+  ptyManager: PTYManager,
+  subscriptions: SubscriptionMap,
+): void {
+  try {
+    ptyManager.detach(sessionId)
+    // Remove from this client's subscriptions
+    const subs = subscriptions.get(ws)
+    if (subs) subs.delete(sessionId)
+    send(ws, { type: 'detached', sessionId })
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : 'Detach failed'
+    sendError(ws, errMsg)
+  }
 }
 
 function handleSessionRename(
