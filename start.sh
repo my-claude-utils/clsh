@@ -77,4 +77,13 @@ echo "Claude Code state synced ✓"
 export TUNNEL=tailscale
 export WEB_PORT=4031
 cd ~/clsh
-npm run dev
+
+# Run inside a host-level tmux so clsh survives the terminal window closing.
+# Kill any stale clsh-server session first — `-A` would silently reattach to a
+# dead session, causing the agent to never start (only Vite HMR output visible).
+if command -v tmux &>/dev/null && [ -z "$TMUX" ]; then
+    tmux kill-session -t clsh-server 2>/dev/null || true
+    exec tmux new-session -s clsh-server "npm run dev"
+else
+    npm run dev
+fi
