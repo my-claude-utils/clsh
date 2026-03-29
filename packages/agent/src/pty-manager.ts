@@ -74,7 +74,7 @@ const ALLOWED_ENV_VARS = new Set([
 ])
 
 /** Prefixes allowed for env vars (e.g., XDG_*, NPM_CONFIG_*, CLAUDE_*). */
-const ALLOWED_ENV_PREFIXES = ['XDG_', 'NPM_CONFIG_', 'CLAUDE_']
+const ALLOWED_ENV_PREFIXES = ['XDG_', 'NPM_CONFIG_', 'CLAUDE_', 'LINEAR_']
 
 /** Maps shell types to their executable and arguments. */
 const SHELL_MAP: Record<ShellType, [string, string[]]> = {

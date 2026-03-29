@@ -69,4 +69,12 @@ describe('buildSafeEnv (Finding #9: env var allowlist)', () => {
     expect(env['XDG_RUNTIME_DIR']).toBe('/run/user/1000')
     expect(env['XDG_CONFIG_HOME']).toBe('/home/test/.config')
   })
+
+  it('passes through LINEAR_ prefixed vars (needed for Linear integration in PTY)', () => {
+    process.env['LINEAR_API_KEY'] = 'lin_api_test123'
+    process.env['LINEAR_TEAM_ID'] = 'team-abc'
+    const env = buildSafeEnv()
+    expect(env['LINEAR_API_KEY']).toBe('lin_api_test123')
+    expect(env['LINEAR_TEAM_ID']).toBe('team-abc')
+  })
 })
