@@ -77,4 +77,47 @@ describe('buildSafeEnv (Finding #9: env var allowlist)', () => {
     expect(env['LINEAR_API_KEY']).toBe('lin_api_test123')
     expect(env['LINEAR_TEAM_ID']).toBe('team-abc')
   })
+
+  it('passes through HUSKY env var (escape hatch to skip git hooks)', () => {
+    process.env['HUSKY'] = '0'
+    const env = buildSafeEnv()
+    expect(env['HUSKY']).toBe('0')
+  })
+
+  it('injects GIT_CONFIG_* vars for CRLF fix in WSL PTY sessions', () => {
+    const env = buildSafeEnv()
+    expect(env['GIT_CONFIG_COUNT']).toBe('2')
+    expect(env['GIT_CONFIG_KEY_0']).toBe('core.autocrlf')
+    expect(env['GIT_CONFIG_VALUE_0']).toBe('input')
+    expect(env['GIT_CONFIG_KEY_1']).toBe('core.eol')
+    expect(env['GIT_CONFIG_VALUE_1']).toBe('lf')
+  })
+
+  it('appends GIT_CONFIG_* vars without clobbering existing entries', () => {
+    // GIT_CONFIG_COUNT is not in the allowlist, so it won't pass through to the
+    // filtered env. However, if it were injected by other code in buildSafeEnv()
+    // in the future, the parseInt logic would correctly append. For now, verify
+    // that external GIT_CONFIG_COUNT doesn't leak through and our injection is stable.
+    process.env['GIT_CONFIG_COUNT'] = '1'
+    process.env['GIT_CONFIG_KEY_0'] = 'user.name'
+    process.env['GIT_CONFIG_VALUE_0'] = 'Test User'
+    const env = buildSafeEnv()
+    // External GIT_CONFIG_* vars don't pass the allowlist, so count starts at 0
+    expect(env['GIT_CONFIG_COUNT']).toBe('2')
+    expect(env['GIT_CONFIG_KEY_0']).toBe('core.autocrlf')
+    expect(env['GIT_CONFIG_VALUE_0']).toBe('input')
+    expect(env['GIT_CONFIG_KEY_1']).toBe('core.eol')
+    expect(env['GIT_CONFIG_VALUE_1']).toBe('lf')
+    // External entries should not leak through
+    expect(env['GIT_CONFIG_VALUE_0']).not.toBe('Test User')
+  })
+
+  it('does not allow arbitrary GIT_CONFIG_* vars through the allowlist', () => {
+    process.env['GIT_CONFIG_KEY_99'] = 'core.sshCommand'
+    process.env['GIT_CONFIG_VALUE_99'] = 'malicious-command'
+    const env = buildSafeEnv()
+    // These should NOT pass through — only our hardcoded entries exist
+    expect(env['GIT_CONFIG_KEY_99']).toBeUndefined()
+    expect(env['GIT_CONFIG_VALUE_99']).toBeUndefined()
+  })
 })

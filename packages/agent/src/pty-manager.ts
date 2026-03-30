@@ -66,6 +66,8 @@ const ALLOWED_ENV_VARS = new Set([
   'GIT_COMMITTER_EMAIL',
   'GIT_SSH_COMMAND',
   'GIT_EDITOR',
+  // Allow HUSKY=0 as an escape hatch to skip hooks entirely in PTY sessions
+  'HUSKY',
   // Claude Code (the primary use case for this tool)
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
@@ -172,6 +174,17 @@ export function buildSafeEnv(): Record<string, string> {
   // Terminal-friendly defaults
   env['FORCE_COLOR'] = '1'
   env['TERM'] = 'xterm-256color'
+
+  // Fix CRLF line endings breaking git hooks (husky) in WSL PTY sessions.
+  // core.autocrlf=input converts CRLF→LF on commit; core.eol=lf forces LF on checkout.
+  // This protects repos the user opens in PTY that lack their own .gitattributes.
+  // Must append to any existing GIT_CONFIG_COUNT, not clobber it.
+  const existingCount = parseInt(env['GIT_CONFIG_COUNT'] ?? '0', 10) || 0
+  env['GIT_CONFIG_COUNT'] = String(existingCount + 2)
+  env[`GIT_CONFIG_KEY_${existingCount}`] = 'core.autocrlf'
+  env[`GIT_CONFIG_VALUE_${existingCount}`] = 'input'
+  env[`GIT_CONFIG_KEY_${existingCount + 1}`] = 'core.eol'
+  env[`GIT_CONFIG_VALUE_${existingCount + 1}`] = 'lf'
 
   return env
 }

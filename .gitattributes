@@ -1,0 +1,4 @@
+# Force LF for shell scripts — WSL can't execute CRLF
+*.sh text eol=lf
+.husky/* text eol=lf
+scripts/* text eol=lf
