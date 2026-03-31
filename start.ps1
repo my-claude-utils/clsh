@@ -1,6 +1,12 @@
 # clsh one-click startup for Windows
 Set-Location $PSScriptRoot
 
+# Resize terminal window for optimal QR code display
+if ($Host.Name -eq 'ConsoleHost') {
+    $Host.UI.RawUI.WindowSize = New-Object System.Management.Automation.Host.Size(120, 50)
+    $Host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.Size(120, 1000)
+}
+
 # Use Node 22 from fnm
 $nodeBin = "C:\Users\Chris\AppData\Roaming\fnm\node-versions\v22.22.1\installation"
 $env:PATH = "$nodeBin;$env:PATH"

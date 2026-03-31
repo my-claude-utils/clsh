@@ -8,9 +8,18 @@ if ! pgrep -x tailscaled > /dev/null; then
     sleep 2
 fi
 
-# ── Node (fnm) ──
-export PATH="/root/.local/share/fnm:$PATH"
-eval "$(fnm env --shell bash)"
+# ── Node (fnm or nvm or system) ──
+if [ -d "$HOME/.local/share/fnm" ]; then
+    export PATH="$HOME/.local/share/fnm:$PATH"
+    eval "$(fnm env --shell bash)"
+elif [ -s "$HOME/.nvm/nvm.sh" ]; then
+    . "$HOME/.nvm/nvm.sh"
+elif command -v node &>/dev/null; then
+    echo "Using system Node: $(node -v)"
+else
+    echo "ERROR: No Node.js found. Install fnm, nvm, or Node.js in WSL."
+    exit 1
+fi
 
 # ── Sync code from Windows → WSL native filesystem ──
 echo "Syncing code..."
@@ -73,10 +82,16 @@ fi
 
 echo "Claude Code state synced ✓"
 
+# ── Install deps on WSL native filesystem ──
+cd ~/clsh
+if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+    echo "Installing dependencies (Linux-native)..."
+    npm install
+fi
+
 # ── Start clsh ──
 export TUNNEL=tailscale
 export WEB_PORT=4031
-cd ~/clsh
 
 # Run inside a host-level tmux so clsh survives the terminal window closing.
 # Kill any stale clsh-server session first — `-A` would silently reattach to a

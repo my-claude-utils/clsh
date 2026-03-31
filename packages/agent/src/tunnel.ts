@@ -305,7 +305,7 @@ export function printAccessInfo(
   const dim = '\x1b[2m'
   const r = '\x1b[0m'
 
-  console.log('')
+  console.clear()
   console.log(`${o}    ██████╗██╗     ███████╗██╗  ██╗${r}`)
   console.log(`${o}   ██╔════╝██║     ██╔════╝██║  ██║${r}`)
   console.log(`${o}   ██║     ██║     ███████╗███████║${r}`)
@@ -313,7 +313,6 @@ export function printAccessInfo(
   console.log(`${o}   ╚██████╗███████╗███████║██║  ██║${r}`)
   console.log(`${o}    ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝${r}`)
   console.log(`${dim}              clsh.dev${r}`)
-  console.log('')
 
   qrcode.generate(authUrl, { small: true }, (code: string) => {
     // Print QR in default terminal colors (high contrast in both light & dark terminals)
