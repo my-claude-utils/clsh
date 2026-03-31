@@ -1,5 +1,12 @@
 # Bug: WebSocket Proxy ECONNRESET in WSL/Tailscale Setup
 
+**Status: RESOLVED** (2026-03-30)
+
+## Fix Applied
+1. Removed `/ws` WebSocket proxy from `vite.config.ts` — root cause of ECONNRESET
+2. Frontend (`useSessionManager.ts`) now always connects directly to agent port in dev mode
+3. Agent (`server.ts`) enumerates all network IPs (including Tailscale) for origin validation
+
 ## Summary
 WebSocket connections die immediately with `ECONNRESET` when running clsh through WSL with Tailscale tunnel. Authentication works, but the terminal WebSocket connection fails.
 

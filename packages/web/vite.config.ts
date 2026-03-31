@@ -17,11 +17,6 @@ export default defineConfig({
     host: true, // bind to 0.0.0.0 so phones on the same Wi-Fi can connect
     allowedHosts: 'all', // Allow Tailscale IPs and all tunnel domains
     proxy: {
-      '/ws': {
-        target: `ws://localhost:${agentPort}`,
-        ws: true,
-        changeOrigin: true,
-      },
       '/api': {
         target: `http://localhost:${agentPort}`,
         changeOrigin: true,

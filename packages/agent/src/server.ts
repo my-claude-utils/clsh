@@ -34,19 +34,20 @@ export interface ServerContext {
 const allowedOrigins = new Set<string>()
 
 /**
- * Returns the first non-internal IPv4 address (e.g. 192.168.x.x).
+ * Returns all non-internal IPv4 addresses (LAN, Tailscale, etc.).
  */
-function getLocalIP(): string | null {
+function getLocalIPs(): string[] {
+  const ips: string[] = []
   const nets = networkInterfaces()
   for (const interfaces of Object.values(nets)) {
     if (!interfaces) continue
     for (const iface of interfaces) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address
+        ips.push(iface.address)
       }
     }
   }
-  return null
+  return ips
 }
 
 /**
@@ -60,10 +61,8 @@ export function updateAllowedOrigins(port: number, tunnelUrl?: string, webPort?:
   const ports = new Set([port])
   if (webPort && webPort !== port) ports.add(webPort)
 
-  // Hosts: localhost, loopback, and local network IP (phones on same Wi-Fi)
-  const hosts = ['localhost', '127.0.0.1']
-  const localIP = getLocalIP()
-  if (localIP) hosts.push(localIP)
+  // Hosts: localhost, loopback, and all local IPs (LAN, Tailscale, etc.)
+  const hosts = ['localhost', '127.0.0.1', ...getLocalIPs()]
 
   for (const host of hosts) {
     for (const p of ports) {
