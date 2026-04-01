@@ -50,14 +50,20 @@ function getLocalIP(): string | null {
  * Uses SIGKILL to ensure the process dies even if SIGTERM is ignored
  * (common when tailscaled runs as root and CLI needs elevated access).
  */
-function runTailscaleCmd(args: string[], timeoutMs: number): { ok: boolean; stdout: string } {
-  const result = spawnSync('tailscale', args, {
+function runTailscaleCmd(
+  args: string[],
+  timeoutMs: number,
+  { sudo = false } = {},
+): { ok: boolean; stdout: string; stderr: string } {
+  const cmd = sudo ? 'sudo' : 'tailscale'
+  const cmdArgs = sudo ? ['-n', 'tailscale', ...args] : args
+  const result = spawnSync(cmd, cmdArgs, {
     encoding: 'utf-8',
     timeout: timeoutMs,
     killSignal: 'SIGKILL',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  return { ok: result.status === 0, stdout: result.stdout ?? '' }
+  return { ok: result.status === 0, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
 }
 
 function getTailscaleFQDN(): string | null {
@@ -88,11 +94,27 @@ function setupTailscaleServe(port: number): string | null {
   }
 
   // Reset any previous serve config
-  runTailscaleCmd(['serve', 'reset'], 3_000)
+  const reset = runTailscaleCmd(['serve', 'reset'], 3_000)
+  if (!reset.ok) {
+    // Non-fatal — try sudo reset before giving up
+    const sudoReset = runTailscaleCmd(['serve', 'reset'], 3_000, { sudo: true })
+    if (!sudoReset.ok) {
+      console.log(
+        `  tailscale serve reset failed: ${(sudoReset.stderr || reset.stderr).trim() || 'unknown error'}`,
+      )
+    }
+  }
 
-  const { ok } = runTailscaleCmd(['serve', '--bg', String(port)], 5_000)
+  let { ok, stderr } = runTailscaleCmd(['serve', '--bg', String(port)], 5_000)
   if (!ok) {
-    console.log('  tailscale serve: command failed, falling back to raw IP')
+    // Daemon socket is often root-owned in WSL — retry with sudo
+    console.log(`  tailscale serve failed (${stderr.trim() || 'no output'}), retrying with sudo...`)
+    ;({ ok, stderr } = runTailscaleCmd(['serve', '--bg', String(port)], 5_000, { sudo: true }))
+  }
+  if (!ok) {
+    console.log(
+      `  tailscale serve: sudo also failed (${stderr.trim() || 'no output'}), falling back to raw IP`,
+    )
     return null
   }
 
@@ -305,38 +327,60 @@ export function printAccessInfo(
   const dim = '\x1b[2m'
   const r = '\x1b[0m'
 
+  const textLines = [
+    '', // top padding
+    `${o}    ██████╗██╗     ███████╗██╗  ██╗${r}`,
+    `${o}   ██╔════╝██║     ██╔════╝██║  ██║${r}`,
+    `${o}   ██║     ██║     ███████╗███████║${r}`,
+    `${o}   ██║     ██║     ╚════██║██╔══██║${r}`,
+    `${o}   ╚██████╗███████╗███████║██║  ██║${r}`,
+    `${o}    ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝${r}`,
+    `${dim}              clsh.dev${r}`,
+    ``,
+    `${o}  Scan to connect ${dim}(token embedded in QR)${r}`,
+    ``,
+    `${o}  URL:   ${r}${publicUrl}`,
+    `${o}  Token: ${r}${bootstrapToken}  ${dim}(one-time, expires in 5 min)${r}`,
+  ]
+
+  const modeLabel =
+    method === 'ngrok'
+      ? 'remote (ngrok)'
+      : method === 'tailscale'
+        ? 'remote (tailscale)'
+        : method === 'ssh'
+          ? 'remote (ssh)'
+          : 'local Wi-Fi only'
+
+  textLines.push(`${o}  Mode:  ${r}${modeLabel}`)
+
+  if (method === 'local') {
+    textLines.push('')
+    textLines.push(`${o}  ⚠  Local mode — phone must be on same Wi-Fi.${r}`)
+    textLines.push(`${dim}     Set NGROK_AUTHTOKEN in .env for remote access.${r}`)
+  }
+
+  textLines.push('')
+  textLines.push(`${dim}  GitHub: https://github.com/my-claude-utils/clsh${r}`)
+
   console.clear()
-  console.log(`${o}    ██████╗██╗     ███████╗██╗  ██╗${r}`)
-  console.log(`${o}   ██╔════╝██║     ██╔════╝██║  ██║${r}`)
-  console.log(`${o}   ██║     ██║     ███████╗███████║${r}`)
-  console.log(`${o}   ██║     ██║     ╚════██║██╔══██║${r}`)
-  console.log(`${o}   ╚██████╗███████╗███████║██║  ██║${r}`)
-  console.log(`${o}    ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝${r}`)
-  console.log(`${dim}              clsh.dev${r}`)
 
   qrcode.generate(authUrl, { small: true }, (code: string) => {
-    // Print QR in default terminal colors (high contrast in both light & dark terminals)
-    console.log(code)
-    console.log(`${o}  Scan to connect ${dim}(token embedded in QR)${r}`)
-    console.log('')
-    console.log(`${o}  URL:   ${r}${publicUrl}`)
-    console.log(`${o}  Token: ${r}${bootstrapToken}  ${dim}(one-time, expires in 5 min)${r}`)
-    const modeLabel =
-      method === 'ngrok'
-        ? 'remote (ngrok)'
-        : method === 'tailscale'
-          ? 'remote (tailscale)'
-          : method === 'ssh'
-            ? 'remote (ssh)'
-            : 'local Wi-Fi only'
-    console.log(`${o}  Mode:  ${r}${modeLabel}`)
-    if (method === 'local') {
-      console.log('')
-      console.log(`${o}  ⚠  Local mode — phone must be on same Wi-Fi.${r}`)
-      console.log(`${dim}     Set NGROK_AUTHTOKEN in .env for remote access.${r}`)
+    const qrLines = code.split('\n')
+    // Remove the trailing empty line if it exists
+    if (qrLines.length > 0 && qrLines[qrLines.length - 1] === '') {
+      qrLines.pop()
     }
+    const qrWidth = qrLines.length > 0 ? qrLines[0].length : 0
+
+    const maxLines = Math.max(qrLines.length, textLines.length)
     console.log('')
-    console.log(`${dim}  GitHub: https://github.com/my-claude-utils/clsh${r}`)
+    for (let i = 0; i < maxLines; i++) {
+      const qrPart = qrLines[i] || ''.padEnd(qrWidth, ' ')
+      const textPart = textLines[i] || ''
+      // Add 4 spaces padding between QR and text
+      console.log(`  ${qrPart}    ${textPart}`)
+    }
     console.log('')
   })
 }
@@ -459,7 +503,8 @@ export async function closeTunnel(): Promise<void> {
     activeSSHProcess = null
   }
   if (activeTailscaleServe) {
-    runTailscaleCmd(['serve', 'reset'], 3_000)
+    const { ok } = runTailscaleCmd(['serve', 'reset'], 3_000)
+    if (!ok) runTailscaleCmd(['serve', 'reset'], 3_000, { sudo: true })
     activeTailscaleServe = false
   }
   tunnelDead = false

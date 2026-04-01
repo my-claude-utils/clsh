@@ -6,6 +6,8 @@ if ! pgrep -x tailscaled > /dev/null; then
     echo "Starting Tailscale daemon..."
     sudo tailscaled --tun=userspace-networking &>/dev/null &
     sleep 2
+    # Make socket accessible to non-root so tailscale serve works without sudo
+    sudo chmod 666 /run/tailscale/tailscaled.sock 2>/dev/null || true
 fi
 
 # ── Node (fnm or nvm or system) ──
