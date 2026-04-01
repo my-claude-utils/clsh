@@ -23,6 +23,7 @@ import { isTmuxAvailable, ensureTmuxConfig } from './tmux.js'
 import { checkNetworkPersistence } from './power.js'
 import { NotificationManager } from './notifications/index.js'
 import { shouldSkipBootstrap } from './auth-config.js'
+import { checkMcpHealth } from './mcp-health.js'
 
 /**
  * Prevents macOS from sleeping while the agent is running.
@@ -220,7 +221,10 @@ export async function main(): Promise<void> {
     console.log('')
   }
 
-  // 15. Register graceful shutdown handlers
+  // 15. Check MCP auth health (warn about missing/expired tokens)
+  checkMcpHealth()
+
+  // 16. Register graceful shutdown handlers
   registerShutdownHandlers(() => {
     try {
       if (process.stdin.setRawMode) process.stdin.setRawMode(false)
