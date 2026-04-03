@@ -6,6 +6,7 @@ import type { DbStatements } from './db.js'
 import { PTYManager, type PTYSession } from './pty-manager.js'
 import type { ClientMessage, ServerMessage, ShellType } from './types.js'
 import type { ResolvedAuth } from './auth-config.js'
+import type { NotificationManager } from './notifications/manager.js'
 
 /** WebSocket close codes. */
 const WS_CLOSE_UNAUTHORIZED = 4001
@@ -60,9 +61,33 @@ export function setupWebSocketHandler(
   jwtSecret: string,
   statements: DbStatements,
   authMode?: ResolvedAuth,
+  notificationManager?: NotificationManager,
 ): void {
   const subscriptions: SubscriptionMap = new Map()
   const disposables: DisposableMap = new Map()
+
+  // Subscribe to in-app notifications and broadcast to all authenticated clients
+  let disposeNotificationListener: (() => void) | null = null
+  if (notificationManager) {
+    disposeNotificationListener = notificationManager.onNotification((sessionId, payload) => {
+      const msg: ServerMessage = {
+        type: 'notification',
+        sessionId,
+        sessionName: payload.session,
+        trigger: payload.trigger,
+        label: payload.label,
+        matched: payload.matched,
+        timestamp: payload.timestamp,
+      }
+      for (const [ws] of subscriptions) {
+        send(ws, msg)
+      }
+    })
+  }
+
+  wss.on('close', () => {
+    disposeNotificationListener?.()
+  })
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     void handleConnection(

@@ -153,15 +153,23 @@ export async function sendToChannel(
   }
 }
 
+/** Max length for matched text sent to external services to limit secret exposure. */
+const MAX_MATCHED_LENGTH = 200
+
 /**
  * Sends a notification to all configured channels.
  * Fire-and-forget — all sends are parallel, none block the caller.
+ * Truncates the matched field to limit accidental secret exposure.
  */
 export function sendToAllChannels(
   channels: NotificationChannel[],
   payload: NotificationPayload,
 ): void {
+  const sanitized =
+    payload.matched.length > MAX_MATCHED_LENGTH
+      ? { ...payload, matched: payload.matched.slice(0, MAX_MATCHED_LENGTH) + '...' }
+      : payload
   for (const channel of channels) {
-    void sendToChannel(channel, payload)
+    void sendToChannel(channel, sanitized)
   }
 }

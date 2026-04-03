@@ -87,6 +87,7 @@ export interface TerminalViewProps {
   skin: SkinId
   perKeyColors: PerKeyColors
   nativeKeyboard: boolean
+  terminalTheme?: import('@xterm/xterm').ITheme
 }
 
 export interface MacBookKeyboardProps {

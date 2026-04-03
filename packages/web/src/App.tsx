@@ -8,11 +8,14 @@ import { SplashScreen } from './components/SplashScreen'
 import { LockSetup } from './components/LockSetup'
 import { LockScreen } from './components/LockScreen'
 import { TemplatePicker, type SessionTemplate } from './components/TemplatePicker'
+import { NotificationToast } from './components/NotificationToast'
 
 import { useAuth } from './hooks/useAuth'
 import { useSessionManager } from './hooks/useSessionManager'
 import { useSkin } from './hooks/useSkin'
+import { useTerminalTheme } from './hooks/useTerminalTheme'
 import { useNativeKeyboard } from './hooks/useNativeKeyboard'
+import { useNotifications } from './hooks/useNotifications'
 import { useLockScreen } from './hooks/useLockScreen'
 import { getBiometricIds, getClientPwdHash } from './lib/lock-screen'
 import type { View } from './lib/types'
@@ -37,7 +40,9 @@ export function App() {
     status: wsStatus,
   } = useSessionManager(auth, handleUnauthorized)
   const { skin, setSkin, perKeyColors, setPerKeyColors } = useSkin()
+  const { themeId, setThemeId, theme: terminalTheme } = useTerminalTheme()
   const { nativeKeyboard, setNativeKeyboard } = useNativeKeyboard()
+  const { notifications, dismiss: dismissNotification } = useNotifications(messageBus)
   const { isLocked, needsSetup, biometricAvailable, hasBiometric, unlock, completeLockSetup } =
     useLockScreen(auth.isAuthenticated)
 
@@ -200,12 +205,15 @@ export function App() {
           skin={skin}
           perKeyColors={perKeyColors}
           nativeKeyboard={nativeKeyboard}
+          terminalTheme={terminalTheme}
         />
         {settingsOpen && (
           <SettingsPanel
             onClose={handleCloseSettings}
             onOpenSkinStudio={handleOpenSkinStudio}
             sessionCount={sessions.length}
+            themeId={themeId}
+            onThemeChange={setThemeId}
           />
         )}
       </>
@@ -239,6 +247,8 @@ export function App() {
             onClose={handleCloseSettings}
             onOpenSkinStudio={handleOpenSkinStudio}
             sessionCount={sessions.length}
+            themeId={themeId}
+            onThemeChange={setThemeId}
           />
         )}
       </>
@@ -248,6 +258,7 @@ export function App() {
   return (
     <>
       {content}
+      <NotificationToast notifications={notifications} onDismiss={dismissNotification} />
       {isLocked && auth.isAuthenticated && !needsSetup && (
         <LockScreen hasBiometric={hasBiometric} onUnlock={unlock} />
       )}

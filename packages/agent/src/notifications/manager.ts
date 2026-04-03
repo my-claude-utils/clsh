@@ -1,6 +1,8 @@
-import type { NotificationConfig } from './types.js'
+import type { NotificationConfig, NotificationPayload } from './types.js'
 import { SessionMonitor } from './session-monitor.js'
 import { CooldownManager } from './cooldown.js'
+
+type NotificationListener = (sessionId: string, payload: NotificationPayload) => void
 
 /**
  * Top-level notification manager. Creates per-session monitors and provides
@@ -10,21 +12,39 @@ export class NotificationManager {
   private config: NotificationConfig
   private cooldown: CooldownManager
   private monitors = new Map<string, SessionMonitor>()
+  private listeners: NotificationListener[] = []
 
   constructor(config: NotificationConfig) {
     this.config = config
     this.cooldown = new CooldownManager(config.cooldown)
   }
 
-  /** Whether notifications are enabled and have at least one channel. */
+  /** Whether notifications are enabled. */
   get active(): boolean {
-    return this.config.enabled && this.config.channels.length > 0
+    return this.config.enabled
+  }
+
+  /**
+   * Subscribe to in-app notifications. Returns a dispose function.
+   * The callback fires for every notification from any session.
+   */
+  onNotification(callback: NotificationListener): () => void {
+    this.listeners.push(callback)
+    return () => {
+      const idx = this.listeners.indexOf(callback)
+      if (idx !== -1) this.listeners.splice(idx, 1)
+    }
   }
 
   /** Register a new session for monitoring. */
   addSession(sessionId: string, sessionName: string): void {
     if (!this.active) return
-    const monitor = new SessionMonitor(sessionId, sessionName, this.config, this.cooldown)
+    const onNotify = (payload: NotificationPayload) => {
+      for (const listener of this.listeners) {
+        listener(sessionId, payload)
+      }
+    }
+    const monitor = new SessionMonitor(sessionId, sessionName, this.config, this.cooldown, onNotify)
     this.monitors.set(sessionId, monitor)
   }
 
@@ -56,12 +76,13 @@ export class NotificationManager {
     this.monitors.get(sessionId)?.notifySessionEvent(event, detail)
   }
 
-  /** Clean up all monitors. */
+  /** Clean up all monitors and listeners. */
   dispose(): void {
     for (const monitor of this.monitors.values()) {
       monitor.dispose()
     }
     this.monitors.clear()
+    this.listeners.length = 0
   }
 
   /** Print startup status to console. */
@@ -74,13 +95,10 @@ export class NotificationManager {
       return
     }
 
-    if (this.config.channels.length === 0) {
-      console.log(`${o}  Notifications:${r} enabled but no channels configured`)
-      console.log(`${dim}  Add channels to ~/.clsh/config.json under "notifications.channels"${r}`)
-      return
-    }
-
-    const channelNames = this.config.channels.map((c) => c.type).join(', ')
+    const channelNames =
+      this.config.channels.length > 0
+        ? this.config.channels.map((c) => c.type).join(', ')
+        : 'in-app'
     const triggerCount =
       [
         this.config.triggers.permissions && 'permissions',

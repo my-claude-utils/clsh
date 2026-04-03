@@ -5,6 +5,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 
+import type { ITheme } from '@xterm/xterm'
 import { CLSH_THEME } from '../lib/theme'
 import { captureColoredScreen } from '../lib/captureTerminalScreen'
 
@@ -31,7 +32,7 @@ interface UseTerminalReturn {
  */
 export function useTerminal(
   containerRef: RefObject<HTMLDivElement | null>,
-  options?: { nativeKeyboard?: boolean },
+  options?: { nativeKeyboard?: boolean; theme?: ITheme },
 ): UseTerminalReturn {
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -51,7 +52,7 @@ export function useTerminal(
       cursorBlink: true,
       fontFamily: '"JetBrains Mono", monospace',
       fontSize: 12,
-      theme: CLSH_THEME,
+      theme: options?.theme ?? CLSH_THEME,
       allowProposedApi: true,
       convertEol: true,
       scrollback: 2000,
@@ -142,6 +143,14 @@ export function useTerminal(
       // will unmount anyway, and calling setState on unmount causes warnings.
     }
   }, [containerRef])
+
+  // Reactive theme update: apply new theme to existing terminal without recreation.
+  const theme = options?.theme
+  useEffect(() => {
+    if (terminalReady && theme) {
+      terminalReady.options.theme = theme
+    }
+  }, [terminalReady, theme])
 
   // Reactive textarea suppression: suppress iOS keyboard unless native keyboard is enabled.
   const nativeKeyboard = options?.nativeKeyboard ?? false

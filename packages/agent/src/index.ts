@@ -138,7 +138,14 @@ export async function main(): Promise<void> {
     }
   }
 
-  setupWebSocketHandler(wss, ptyManager, config.jwtSecret, statements, config.authMode)
+  setupWebSocketHandler(
+    wss,
+    ptyManager,
+    config.jwtSecret,
+    statements,
+    config.authMode,
+    notificationManager,
+  )
 
   // 9. Start HTTP server (auto-finds open port if configured port is busy)
   const actualPort = await startServer(httpServer, config.port)

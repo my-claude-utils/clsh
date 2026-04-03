@@ -33,6 +33,12 @@ export interface CustomPattern {
   label: string
 }
 
+/** Pre-compiled custom pattern (compiled once at config load, not per line). */
+export interface CompiledPattern {
+  regex: RegExp
+  label: string
+}
+
 export interface TriggerConfig {
   permissions: boolean
   completion: boolean
@@ -59,9 +65,9 @@ export interface NotificationPayload {
   timestamp: string
 }
 
-/** Default notification config (all disabled). */
+/** Default notification config (enabled for in-app; add channels for external). */
 export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
-  enabled: false,
+  enabled: true,
   channels: [],
   triggers: {
     permissions: true,

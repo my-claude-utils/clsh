@@ -60,5 +60,14 @@ export type ServerMessage =
       attachedClients?: number
     }
   | { type: 'detached'; sessionId: string }
+  | {
+      type: 'notification'
+      sessionId: string
+      sessionName: string
+      trigger: 'permission' | 'completion' | 'error' | 'custom' | 'session'
+      label: string
+      matched: string
+      timestamp: string
+    }
   | { type: 'error'; message: string }
   | { type: 'pong' }

@@ -1,28 +1,37 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react'
+import { TERMINAL_THEMES, TERMINAL_THEME_ORDER, type TerminalThemeId } from '../lib/theme'
 
 interface SettingsPanelProps {
-  onClose: () => void;
-  onOpenSkinStudio: () => void;
-  sessionCount: number;
+  onClose: () => void
+  onOpenSkinStudio: () => void
+  sessionCount: number
+  themeId: TerminalThemeId
+  onThemeChange: (id: TerminalThemeId) => void
 }
 
 interface QuickCommand {
-  label: string;
-  icon: string;
-  description: string;
-  action: () => void;
+  label: string
+  icon: string
+  description: string
+  action: () => void
 }
 
-export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: SettingsPanelProps) {
-  const [showShareQR, setShowShareQR] = useState(false);
-  const [copied, setCopied] = useState(false);
+export function SettingsPanel({
+  onClose,
+  onOpenSkinStudio,
+  sessionCount,
+  themeId,
+  onThemeChange,
+}: SettingsPanelProps) {
+  const [showShareQR, setShowShareQR] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const handleCopyUrl = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }, []);
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [])
 
   const quickCommands: QuickCommand[] = [
     {
@@ -30,8 +39,8 @@ export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: Setti
       icon: '\u{1F3A8}',
       description: 'Customize your keyboard look',
       action: () => {
-        onClose();
-        onOpenSkinStudio();
+        onClose()
+        onOpenSkinStudio()
       },
     },
     {
@@ -45,10 +54,10 @@ export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: Setti
       icon: '\u{1F4F8}',
       description: 'How to capture your terminal',
       action: () => {
-        alert('Use Power + Volume Up to screenshot your terminal — it looks awesome in dark mode!');
+        alert('Use Power + Volume Up to screenshot your terminal — it looks awesome in dark mode!')
       },
     },
-  ];
+  ]
 
   return (
     <div
@@ -94,10 +103,7 @@ export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: Setti
         </div>
 
         {/* Stats row */}
-        <div
-          className="flex gap-3"
-          style={{ marginBottom: 16 }}
-        >
+        <div className="flex gap-3" style={{ marginBottom: 16 }}>
           <div
             style={{
               flex: 1,
@@ -121,9 +127,7 @@ export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: Setti
               textAlign: 'center',
             }}
           >
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#28c840' }}>
-              &#x25CF;
-            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#28c840' }}>&#x25CF;</div>
             <div style={{ fontSize: 9, color: '#555', marginTop: 2 }}>CONNECTED</div>
           </div>
           <div
@@ -138,6 +142,73 @@ export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: Setti
           >
             <div style={{ fontSize: 18, fontWeight: 700, color: '#ccc' }}>v0.1</div>
             <div style={{ fontSize: 9, color: '#555', marginTop: 2 }}>VERSION</div>
+          </div>
+        </div>
+
+        {/* Terminal Theme */}
+        <div style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: '#555',
+              marginBottom: 8,
+              letterSpacing: '0.08em',
+            }}
+          >
+            TERMINAL THEME
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {TERMINAL_THEME_ORDER.map((id) => {
+              const def = TERMINAL_THEMES[id]
+              const isActive = id === themeId
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onThemeChange(id)}
+                  style={{
+                    width: 'calc(50% - 4px)',
+                    padding: '8px 10px',
+                    background: def.theme.background,
+                    border: isActive ? '2px solid #f97316' : '1px solid #333',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: 2, marginBottom: 4 }}>
+                    {[
+                      def.theme.red,
+                      def.theme.green,
+                      def.theme.yellow,
+                      def.theme.blue,
+                      def.theme.magenta,
+                      def.theme.cyan,
+                    ].map((c, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 2,
+                          background: c as string,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: def.theme.foreground as string,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {def.name}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#666' }}>{def.subtitle}</div>
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -235,11 +306,9 @@ export function SettingsPanel({ onClose, onOpenSkinStudio, sessionCount }: Setti
 
         {/* Footer */}
         <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <span style={{ fontSize: 9, color: '#333' }}>
-            clsh v0.1.0 — your mac, in your pocket
-          </span>
+          <span style={{ fontSize: 9, color: '#333' }}>clsh v0.1.0 — your mac, in your pocket</span>
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -28,10 +28,15 @@ describe('CooldownManager', () => {
     expect(mgr.shouldSend('session-1', 'error', 'ERROR: test')).toBe(true)
   })
 
-  it('permission triggers always bypass cooldown', () => {
+  it('permission triggers bypass normal cooldown but have a 2s rate limit', () => {
     const mgr = new CooldownManager(10)
     expect(mgr.shouldSend('session-1', 'error', 'ERROR: test')).toBe(true)
+    // Permission bypasses the 10s cooldown from the error above
     expect(mgr.shouldSend('session-1', 'permission', 'Allow?')).toBe(true)
+    // But a second permission within 2s is rate-limited
+    expect(mgr.shouldSend('session-1', 'permission', 'Allow write?')).toBe(false)
+    // After 2s it goes through again
+    vi.advanceTimersByTime(2_100)
     expect(mgr.shouldSend('session-1', 'permission', 'Allow write?')).toBe(true)
   })
 

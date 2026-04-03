@@ -456,6 +456,7 @@ export class PTYManager {
           }
         }
       }
+      this.notifications?.removeSession(session.id)
       this.sessions.delete(session.id)
       this.updateListeners.delete(session.id)
     })
@@ -485,6 +486,7 @@ export class PTYManager {
       // If detaching or shutting down, skip tmux cleanup — session persists
       if (this.detachingIds.has(session.id)) {
         this.detachingIds.delete(session.id)
+        this.notifications?.removeSession(session.id)
         this.sessions.delete(session.id)
         this.updateListeners.delete(session.id)
         for (const listener of exitListeners) {
@@ -494,6 +496,7 @@ export class PTYManager {
       }
 
       if (this.shuttingDown) {
+        this.notifications?.removeSession(session.id)
         this.sessions.delete(session.id)
         this.updateListeners.delete(session.id)
         for (const listener of exitListeners) {
@@ -515,6 +518,7 @@ export class PTYManager {
       for (const listener of exitListeners) {
         listener(event)
       }
+      this.notifications?.removeSession(session.id)
       this.sessions.delete(session.id)
       this.updateListeners.delete(session.id)
     })

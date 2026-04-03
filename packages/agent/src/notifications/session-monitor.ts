@@ -1,5 +1,10 @@
-import type { NotificationConfig, NotificationPayload, TriggerType } from './types.js'
-import { LineBuffer, detectTrigger } from './triggers.js'
+import type {
+  CompiledPattern,
+  NotificationConfig,
+  NotificationPayload,
+  TriggerType,
+} from './types.js'
+import { LineBuffer, compileCustomPatterns, detectTrigger } from './triggers.js'
 import { sendToAllChannels } from './channels.js'
 import { CooldownManager } from './cooldown.js'
 
@@ -13,6 +18,8 @@ export class SessionMonitor {
   private cooldown: CooldownManager
   private sessionId: string
   private sessionName: string
+  private onNotify: ((payload: NotificationPayload) => void) | null
+  private compiledPatterns: CompiledPattern[]
 
   /** Timestamp of last PTY output — used for completion detection. */
   private lastOutputAt = 0
@@ -30,11 +37,14 @@ export class SessionMonitor {
     sessionName: string,
     config: NotificationConfig,
     cooldown: CooldownManager,
+    onNotify?: (payload: NotificationPayload) => void,
   ) {
     this.sessionId = sessionId
     this.sessionName = sessionName
     this.config = config
     this.cooldown = cooldown
+    this.onNotify = onNotify ?? null
+    this.compiledPatterns = compileCustomPatterns(config.triggers.customPatterns)
 
     this.lineBuffer = new LineBuffer((line) => {
       this.processLine(line)
@@ -86,7 +96,7 @@ export class SessionMonitor {
   private processLine(line: string): void {
     if (!this.config.enabled) return
 
-    const match = detectTrigger(line, this.config.triggers)
+    const match = detectTrigger(line, this.config.triggers, this.compiledPatterns)
     if (!match) return
 
     if (this.cooldown.shouldSend(this.sessionId, match.trigger, match.matched)) {
@@ -117,6 +127,9 @@ export class SessionMonitor {
       matched,
       timestamp: new Date().toISOString(),
     }
-    sendToAllChannels(this.config.channels, payload)
+    if (this.config.channels.length > 0) {
+      sendToAllChannels(this.config.channels, payload)
+    }
+    this.onNotify?.(payload)
   }
 }

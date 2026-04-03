@@ -15,7 +15,12 @@ interface CooldownEntry {
  */
 export class CooldownManager {
   private entries = new Map<string, CooldownEntry>()
+  /** Tracks last permission send time per session (separate from general cooldown). */
+  private lastPermissionAt = new Map<string, number>()
   private cooldownMs: number
+
+  /** Minimum gap between permission notifications to prevent flood (2 seconds). */
+  private static readonly PERMISSION_MIN_MS = 2_000
 
   constructor(cooldownSeconds: number) {
     this.cooldownMs = cooldownSeconds * 1000
@@ -26,8 +31,13 @@ export class CooldownManager {
    * Records the send timestamp if allowed.
    */
   shouldSend(sessionId: string, trigger: TriggerType, matchedText: string): boolean {
-    // Permissions always go through
+    // Permissions bypass normal cooldown but have their own 2s rate limit
     if (trigger === 'permission') {
+      const lastPerm = this.lastPermissionAt.get(sessionId)
+      if (lastPerm !== undefined && Date.now() - lastPerm < CooldownManager.PERMISSION_MIN_MS) {
+        return false
+      }
+      this.lastPermissionAt.set(sessionId, Date.now())
       this.record(sessionId, matchedText)
       return true
     }
@@ -65,5 +75,6 @@ export class CooldownManager {
   /** Clears cooldown state for a session (e.g., on session close). */
   clear(sessionId: string): void {
     this.entries.delete(sessionId)
+    this.lastPermissionAt.delete(sessionId)
   }
 }

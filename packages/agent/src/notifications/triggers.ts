@@ -1,4 +1,4 @@
-import type { TriggerConfig, TriggerType } from './types.js'
+import type { CompiledPattern, CustomPattern, TriggerConfig, TriggerType } from './types.js'
 
 /**
  * Strips ANSI escape sequences from a string.
@@ -67,11 +67,37 @@ const ERROR_PATTERNS = [
 ]
 
 /**
+ * Pre-compiles custom patterns from config at startup.
+ * Invalid regex patterns are logged and skipped.
+ */
+export function compileCustomPatterns(patterns: CustomPattern[]): CompiledPattern[] {
+  const compiled: CompiledPattern[] = []
+  for (const custom of patterns) {
+    try {
+      compiled.push({ regex: new RegExp(custom.pattern), label: custom.label })
+    } catch {
+      process.stderr.write(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          event: 'notification.pattern.invalid',
+          data: { pattern: custom.pattern, label: custom.label },
+        }) + '\n',
+      )
+    }
+  }
+  return compiled
+}
+
+/**
  * Analyzes a stripped line and returns a trigger match if one is found.
  * Priority: permissions > errors > custom > completion.
  * Returns null if no trigger matches.
  */
-export function detectTrigger(line: string, config: TriggerConfig): TriggerMatch | null {
+export function detectTrigger(
+  line: string,
+  config: TriggerConfig,
+  compiledPatterns?: CompiledPattern[],
+): TriggerMatch | null {
   // 1. Permission prompts (highest priority)
   if (config.permissions) {
     for (const pattern of PERMISSION_PATTERNS) {
@@ -98,22 +124,17 @@ export function detectTrigger(line: string, config: TriggerConfig): TriggerMatch
     }
   }
 
-  // 3. Custom patterns
-  for (const custom of config.customPatterns) {
-    try {
-      const regex = new RegExp(custom.pattern)
-      const match = regex.exec(line)
-      if (match) {
-        // Use captured group if available, otherwise the full match
-        const matched = match[1] ?? match[0]
-        return {
-          trigger: 'custom',
-          label: custom.label,
-          matched: matched.trim(),
-        }
+  // 3. Custom patterns (pre-compiled to avoid per-line RegExp construction and ReDoS)
+  const customs = compiledPatterns ?? compileCustomPatterns(config.customPatterns)
+  for (const compiled of customs) {
+    const match = compiled.regex.exec(line)
+    if (match) {
+      const matched = match[1] ?? match[0]
+      return {
+        trigger: 'custom',
+        label: compiled.label,
+        matched: matched.trim(),
       }
-    } catch {
-      // Invalid regex — skip silently
     }
   }
 

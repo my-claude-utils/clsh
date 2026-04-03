@@ -26,11 +26,12 @@ export function TerminalView({
   skin,
   perKeyColors,
   nativeKeyboard,
+  terminalTheme,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { terminal, write, getDimensions, captureScreen, scrollToBottom } = useTerminal(
     containerRef,
-    { nativeKeyboard },
+    { nativeKeyboard, theme: terminalTheme },
   )
 
   // Pinned commands for this session — fetched once on mount, matched by initial name
