@@ -12,6 +12,8 @@
  *   - Same-data dedup window on onData (safety net)
  */
 import { describe, it, expect } from 'vitest'
+import * as fs from 'fs'
+import * as path from 'path'
 
 /** inputType values that must be blocked in beforeinput to prevent autocorrect. */
 const BLOCKED_INPUT_TYPES = ['insertReplacementText'] as const
@@ -82,79 +84,62 @@ describe('Android IME — textarea clearing', () => {
   })
 })
 
-describe('Android IME — onData deduplication', () => {
+describe('Android IME — native keyboard regression guard', () => {
   /**
-   * Simulates the dedup logic from TerminalView's onData handler.
-   * This is the safety net that catches any remaining double-fires
-   * from compositionend + input events.
+   * CRITICAL REGRESSION TEST
+   *
+   * On Android Chrome, adding input/composition event listeners (in ANY phase)
+   * to the xterm textarea or any ancestor element causes the IME framework to
+   * refuse to establish an input connection.  This breaks ALL keyboard input:
+   * USB-C, Bluetooth, and native soft keyboard.
+   *
+   * This happened in commit acd9a79 (March 28 2026) when a "stabilization pass"
+   * added beforeinput/input/compositionstart/compositionend listeners to the
+   * terminal container element.  Even moving them to the textarea itself (bubble
+   * phase) did not fix it — the listeners had to be removed entirely.
+   *
+   * The native keyboard effect in TerminalView.tsx MUST remain a simple
+   * terminal.onData() subscription with NO additional DOM event listeners.
    */
-  // No composition suppression — Android does per-character micro-compositions
-  // and xterm fires onData inside its own compositionend handler (before
-  // external listeners).  Suppressing during composition would eat chars.
-  // We rely on dedup only.
+  it('TerminalView native keyboard effect must not add DOM event listeners', () => {
+    const terminalViewPath = path.resolve(__dirname, '../../components/TerminalView.tsx')
+    const source = fs.readFileSync(terminalViewPath, 'utf-8')
 
-  function createDedup(dedupMs = 50) {
-    const emitted: string[] = []
-    let lastData = ''
-    let lastTime = 0
+    // Find the native keyboard useEffect block — it starts with the comment
+    // "When native keyboard is enabled" and ends at the next useEffect or
+    // the next top-level function/return.
+    const nativeKbMatch = source.match(
+      /\/\/ When native keyboard is enabled[\s\S]*?(?=\n {2}(?:\/\/ |const |useEffect|return \())/,
+    )
+    expect(nativeKbMatch).not.toBeNull()
+    const nativeKbBlock = nativeKbMatch?.[0] ?? ''
 
-    return {
-      emitted,
-      onData(data: string, now: number) {
-        if (data === lastData && now - lastTime < dedupMs) return
-        lastData = data
-        lastTime = now
-        emitted.push(data)
-      },
-    }
-  }
+    // Must NOT contain addEventListener — this breaks Android IME
+    expect(nativeKbBlock).not.toContain('addEventListener')
 
-  it('suppresses identical data within the dedup window', () => {
-    const { emitted, onData } = createDedup()
+    // Must NOT contain removeEventListener (implies listeners were added)
+    expect(nativeKbBlock).not.toContain('removeEventListener')
 
-    onData('a', 0) // emitted
-    onData('a', 3) // suppressed (3ms < 50ms, same data)
-    onData('b', 5) // emitted (different data)
-    onData('a', 100) // emitted (100ms > 50ms window)
-
-    expect(emitted).toEqual(['a', 'b', 'a'])
+    // Must contain the simple onData subscription
+    expect(nativeKbBlock).toContain('terminal.onData')
+    expect(nativeKbBlock).toContain('handleKey(data)')
   })
 
-  it('does not suppress different data even within dedup window', () => {
-    const { emitted, onData } = createDedup()
+  it('useTerminal native keyboard branch must not add event listeners', () => {
+    const useTerminalPath = path.resolve(__dirname, '../useTerminal.ts')
+    const source = fs.readFileSync(useTerminalPath, 'utf-8')
 
-    onData('h', 0)
-    onData('e', 10)
-    onData('l', 20)
-    onData('l', 30) // same as previous, within window → suppressed
-    onData('o', 40)
+    // Find the nativeKeyboard=true branch in the textarea suppression effect
+    const nativeMatch = source.match(/if \(nativeKeyboard\) \{[\s\S]*?return[\s\S]*?\n {4}\}/)
+    expect(nativeMatch).not.toBeNull()
+    const nativeBranch = nativeMatch?.[0] ?? ''
 
-    expect(emitted).toEqual(['h', 'e', 'l', 'o'])
-  })
+    // Must NOT contain addEventListener — this breaks Android IME
+    expect(nativeBranch).not.toContain('addEventListener')
 
-  it('allows same character after dedup window expires', () => {
-    const { emitted, onData } = createDedup()
-
-    onData('l', 0)
-    onData('l', 60) // 60ms > 50ms → emitted
-
-    expect(emitted).toEqual(['l', 'l'])
-  })
-
-  it('handles Android per-char composition double-fire', () => {
-    // On Android, each character goes through a micro-composition cycle.
-    // xterm fires onData at compositionend, then again from the input event.
-    // The dedup catches the second fire.
-    const { emitted, onData } = createDedup()
-
-    // Char 1: 'h' — compositionend fires onData, then input fires again
-    onData('h', 0) // emitted (first)
-    onData('h', 3) // suppressed (dedup, 3ms < 50ms)
-
-    // Char 2: 'i' — same pattern
-    onData('i', 60) // emitted (different data + gap > 50ms)
-    onData('i', 63) // suppressed (dedup)
-
-    expect(emitted).toEqual(['h', 'i'])
+    // Must contain the essential restore operations
+    expect(nativeBranch).toContain("removeAttribute('inputmode')")
+    expect(nativeBranch).toContain("removeAttribute('readonly')")
+    expect(nativeBranch).toContain('.focus()')
   })
 })

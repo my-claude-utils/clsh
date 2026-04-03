@@ -35,7 +35,7 @@ describe('session reconnect merge (Phase 1a)', () => {
     const sessionListHandler = source.match(/case\s+'session_list'[\s\S]*?break/)
     expect(sessionListHandler).not.toBeNull()
     // Should reference 'snapshot' to preserve it during merge
-    expect(sessionListHandler![0]).toContain('snapshot')
+    expect(sessionListHandler?.[0]).toContain('snapshot')
   })
 })
 

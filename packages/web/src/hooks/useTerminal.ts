@@ -162,18 +162,13 @@ export function useTerminal(
       container.querySelectorAll<HTMLTextAreaElement>('.xterm-helper-textarea')
 
     if (nativeKeyboard) {
-      // Restore xterm's textarea so physical keyboard input works
+      // Restore xterm's textarea so physical keyboard input works.
+      // Just undo the suppression from the false branch — clear inline styles
+      // and remove readonly/inputmode attributes.  Keep it minimal: the
+      // original simple version is proven to work on Android.
       textareas().forEach((t) => {
         t.removeAttribute('inputmode')
         t.removeAttribute('readonly')
-        // Disable Android IME smartness — autocorrect/autocomplete replace
-        // already-sent text, causing the old AND new versions to both appear
-        // in the terminal.  Terminals should never autocorrect.
-        t.setAttribute('autocomplete', 'off')
-        t.setAttribute('autocorrect', 'off')
-        t.setAttribute('autocapitalize', 'off')
-        t.setAttribute('spellcheck', 'false')
-        t.setAttribute('data-gramm', 'false') // Grammarly
         t.style.position = ''
         t.style.top = ''
         t.style.left = ''
@@ -181,18 +176,7 @@ export function useTerminal(
         t.style.opacity = ''
         t.focus()
       })
-
-      // xterm may recreate its textarea; re-apply attributes after a tick
-      const applyTimer = setTimeout(() => {
-        textareas().forEach((t) => {
-          t.setAttribute('autocomplete', 'off')
-          t.setAttribute('autocorrect', 'off')
-          t.setAttribute('autocapitalize', 'off')
-          t.setAttribute('spellcheck', 'false')
-        })
-      }, 150)
-
-      return () => clearTimeout(applyTimer)
+      return
     }
 
     // Suppress: move off-screen, prevent iOS keyboard

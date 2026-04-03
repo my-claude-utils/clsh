@@ -193,102 +193,18 @@ export function TerminalView({
   )
 
   // When native keyboard is enabled, wire xterm's onData to send keystrokes.
-  //
-  // Android IME fix — Android keyboards (Gboard, Samsung, etc.) use IME
-  // composition for ALL input, even single characters.  This causes:
-  //
-  //   1. Autocorrect replacements: After typing "didnt", autocorrect fires
-  //      `insertReplacementText` to replace with "didn't" — but each
-  //      original char was already sent.  Fix: cancel in `beforeinput`.
-  //
-  //   2. IME context buildup: the textarea accumulates text that the IME
-  //      uses for prediction, causing re-processing of old text.
-  //      Fix: clear textarea after xterm has processed each input.
-  //
-  //   3. Double-fire: compositionend + subsequent input event both cause
-  //      xterm to emit onData with identical data within ~1-5ms.
-  //      Fix: 50ms same-data dedup window.
-  //
-  // NOTE: We do NOT suppress onData during composition.  Android does
-  // per-character micro-compositions (compositionstart → compositionend
-  // for each keystroke).  xterm fires onData inside its own compositionend
-  // handler which runs BEFORE any external listener — suppressing during
-  // composition would swallow every character.
+  // Keep this minimal — the simple version is proven to work on Android.
+  // IME protection (autocorrect, dedup, textarea clearing) was added in the
+  // stabilization pass but broke Android keyboard input entirely by adding
+  // event listeners that disrupted the IME framework.  If IME issues resurface,
+  // they must be addressed WITHOUT adding input/composition event listeners
+  // to the textarea or its ancestors.
   useEffect(() => {
     if (!terminal || !nativeKeyboard) return
-
-    const container = containerRef.current
-    if (!container) return
-
-    // Helper to get the current xterm textarea (may be recreated by xterm.js)
-    const getTextarea = () => container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
-
-    // --- Layer 1: Cancel autocorrect replacements ---
-    // Use container with capture phase so we catch events even if xterm
-    // recreates the textarea after initial mount.
-    const onBeforeInput = (e: Event) => {
-      if (e instanceof InputEvent && e.inputType === 'insertReplacementText') {
-        e.preventDefault()
-      }
-    }
-
-    // --- Layer 2: Clear textarea to prevent IME context buildup ---
-    // Track composition so we don't clear mid-composition (would break
-    // xterm's CompositionHelper baseline tracking).
-    let composing = false
-
-    const onCompositionStart = () => {
-      composing = true
-    }
-    const onCompositionEnd = () => {
-      composing = false
-      // Clear after composition to reset IME prediction context
-      const ta = getTextarea()
-      if (ta) {
-        queueMicrotask(() => {
-          ta.value = ''
-        })
-      }
-    }
-    const onInput = () => {
-      if (!composing) {
-        const ta = getTextarea()
-        if (ta) {
-          queueMicrotask(() => {
-            ta.value = ''
-          })
-        }
-      }
-    }
-
-    // Attach to container (capture phase) so listeners survive textarea recreation
-    container.addEventListener('beforeinput', onBeforeInput, true)
-    container.addEventListener('input', onInput, true)
-    container.addEventListener('compositionstart', onCompositionStart, true)
-    container.addEventListener('compositionend', onCompositionEnd, true)
-
-    // --- Layer 3: Same-data dedup (safety net) ---
-    let lastEmit = ''
-    let lastEmitTime = 0
-    const DEDUP_MS = 50
-
     const disposable = terminal.onData((data: string) => {
-      const now = performance.now()
-      if (data === lastEmit && now - lastEmitTime < DEDUP_MS) {
-        return // duplicate from Android IME double-fire
-      }
-      lastEmit = data
-      lastEmitTime = now
       handleKey(data)
     })
-
-    return () => {
-      disposable.dispose()
-      container.removeEventListener('beforeinput', onBeforeInput, true)
-      container.removeEventListener('input', onInput, true)
-      container.removeEventListener('compositionstart', onCompositionStart, true)
-      container.removeEventListener('compositionend', onCompositionEnd, true)
-    }
+    return () => disposable.dispose()
   }, [terminal, nativeKeyboard, handleKey])
 
   const handleBack = useCallback(() => {
