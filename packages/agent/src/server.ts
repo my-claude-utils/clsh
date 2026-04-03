@@ -169,19 +169,11 @@ export function createAppServer(config: AgentConfig, statements: DbStatements): 
 
   // Session templates endpoint (requires auth unless in tailscale mode)
   app.get('/api/templates', async (req, res) => {
-    if (!shouldTrustConnection(config.authMode)) {
-      const authHeader = req.headers.authorization
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Authorization required' })
-        return
-      }
-      try {
-        await verifySession(authHeader.slice(7), config.jwtSecret, statements)
-      } catch {
-        res.status(401).json({ error: 'Invalid or expired token' })
-        return
-      }
-    }
+    if (
+      !shouldTrustConnection(config.authMode) &&
+      !(await requireAuth(req, res, config.jwtSecret, statements))
+    )
+      return
     res.json({
       templates: config.sessionTemplates ?? [],
       pinnedCommands: config.pinnedCommands ?? [],
@@ -411,19 +403,7 @@ function mountAuthRoutes(app: Express, config: AgentConfig, statements: DbStatem
   // POST /api/auth/password/setup — set or update the server-side password (authenticated)
   app.post('/api/auth/password/setup', authLimiter, async (req, res) => {
     try {
-      // Require valid JWT
-      const authHeader = req.headers.authorization
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Authorization required' })
-        return
-      }
-
-      try {
-        await verifySession(authHeader.slice(7), config.jwtSecret, statements)
-      } catch {
-        res.status(401).json({ error: 'Invalid or expired token' })
-        return
-      }
+      if (!(await requireAuth(req, res, config.jwtSecret, statements))) return
 
       const { password } = req.body as { password?: string }
       if (!password || typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
@@ -498,17 +478,7 @@ function mountAuthRoutes(app: Express, config: AgentConfig, statements: DbStatem
   // GET /api/auth/lock/state — restore lock state for PWA (authenticated)
   app.get('/api/auth/lock/state', async (req, res) => {
     try {
-      const authHeader = req.headers.authorization
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ error: 'Authorization required' })
-        return
-      }
-      try {
-        await verifySession(authHeader.slice(7), config.jwtSecret, statements)
-      } catch {
-        res.status(401).json({ error: 'Invalid or expired token' })
-        return
-      }
+      if (!(await requireAuth(req, res, config.jwtSecret, statements))) return
 
       const passwordRow = statements.getPassword.get()
 
@@ -584,6 +554,30 @@ export async function startServer(httpServer: HttpServer, port: number): Promise
       resolve(freePort)
     })
   })
+}
+
+/**
+ * Verifies the Bearer token on an incoming request.
+ * Sends a 401 response and returns false if auth fails.
+ */
+async function requireAuth(
+  req: express.Request,
+  res: express.Response,
+  jwtSecret: string,
+  dbStatements: DbStatements,
+): Promise<boolean> {
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Authorization required' })
+    return false
+  }
+  try {
+    await verifySession(authHeader.slice(7), jwtSecret, dbStatements)
+    return true
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' })
+    return false
+  }
 }
 
 export { generateBootstrapToken }

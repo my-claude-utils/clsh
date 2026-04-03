@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/my-claude-utils/clsh.git",
+    "url": "https://github.com/cshumac/clsh.git",
     "directory": "packages/agent"
   },
-  "homepage": "https://clsh.dev",
+  "homepage": "https://github.com/cshumac/clsh",
   "bugs": {
-    "url": "https://github.com/my-claude-utils/clsh/issues"
+    "url": "https://github.com/cshumac/clsh/issues"
   },
   "type": "module",
   "files": [
@@ -32,6 +32,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@clsh/shared": "0.0.1",
     "@ngrok/ngrok": "^1.4.0",
     "better-sqlite3": "11.0.0",
     "express": "^4.21.0",

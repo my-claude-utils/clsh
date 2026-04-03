@@ -3,10 +3,12 @@
  * Import from here to keep all agents aligned on the same interfaces.
  */
 
-// ── Sessions ──────────────────────────────────────────────────────────────────
+import type { SessionStatus, ShellType } from '@clsh/shared'
 
-export type SessionStatus = 'run' | 'idle' | 'attention' | 'sleeping' | 'exited'
-export type ShellType = 'bash' | 'zsh' | 'tmux' | 'claude'
+// Re-export protocol types so existing imports from '../lib/types' keep working
+export type { SessionStatus, ShellType } from '@clsh/shared'
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
 
 export interface Session {
   id: string // server-assigned UUID

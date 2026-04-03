@@ -9,5 +9,5 @@ export function TrafficLights() {
       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: '#febc2e' }} />
       <div className="h-3 w-3 rounded-full" style={{ backgroundColor: '#28c840' }} />
     </div>
-  );
+  )
 }

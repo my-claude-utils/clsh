@@ -34,6 +34,32 @@ function sendError(ws: WebSocket, message: string): void {
   send(ws, { type: 'error', message })
 }
 
+/** Cleans up subscriptions and disposables for a disconnected WebSocket client. */
+function cleanupConnection(
+  ws: WebSocket,
+  ptyManager: PTYManager,
+  subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
+): void {
+  const subs = subscriptions.get(ws)
+  if (subs) {
+    for (const sessionId of subs) {
+      ptyManager.decrementAttached(sessionId)
+    }
+  }
+  const wsDisposables = disposables.get(ws)
+  if (wsDisposables) {
+    for (const dispose of wsDisposables) dispose()
+    disposables.delete(ws)
+  }
+  subscriptions.delete(ws)
+}
+
+/** Extracts an error message, falling back to a default string for non-Error values. */
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
+
 function isValidShell(shell: unknown): shell is ShellType {
   return shell === 'bash' || shell === 'zsh' || shell === 'tmux' || shell === 'claude'
 }
@@ -167,37 +193,13 @@ async function handleConnection(
 
   ws.on('close', () => {
     clearTimeout(authTimeout)
-    // Decrement attached count for all sessions this client was subscribed to
-    const subs = subscriptions.get(ws)
-    if (subs) {
-      for (const sessionId of subs) {
-        ptyManager.decrementAttached(sessionId)
-      }
-    }
-    // Clean up all session callback subscriptions for this WS client
-    const wsDisposables = disposables.get(ws)
-    if (wsDisposables) {
-      for (const dispose of wsDisposables) dispose()
-      disposables.delete(ws)
-    }
-    subscriptions.delete(ws)
+    cleanupConnection(ws, ptyManager, subscriptions, disposables)
     auditLog('ws.disconnected', { ip: _req.socket.remoteAddress })
   })
 
   ws.on('error', () => {
     clearTimeout(authTimeout)
-    const subs = subscriptions.get(ws)
-    if (subs) {
-      for (const sessionId of subs) {
-        ptyManager.decrementAttached(sessionId)
-      }
-    }
-    const wsDisposables = disposables.get(ws)
-    if (wsDisposables) {
-      for (const dispose of wsDisposables) dispose()
-      disposables.delete(ws)
-    }
-    subscriptions.delete(ws)
+    cleanupConnection(ws, ptyManager, subscriptions, disposables)
   })
 }
 
@@ -303,73 +305,11 @@ function handleSessionCreate(
   try {
     session = ptyManager.create(shell, 80, 24, name, cwd)
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Failed to create session'
-    sendError(ws, errMsg)
+    sendError(ws, errorMessage(err, 'Failed to create session'))
     return
   }
 
-  // Subscribe this client to the new session
-  const clientSubs = subscriptions.get(ws)
-  if (clientSubs) {
-    clientSubs.add(session.id)
-  }
-  ptyManager.incrementAttached(session.id)
-
-  // Send session info back to client
-  send(ws, {
-    type: 'session',
-    sessionId: session.id,
-    shell: session.shell,
-    pid: session.pty.pid,
-    name: session.name,
-    cwd: session.cwd,
-    status: session.status,
-  })
-
-  // Replay buffer for reconnection
-  for (const chunk of session.buffer) {
-    send(ws, { type: 'stdout', sessionId: session.id, data: chunk })
-  }
-
-  // Stream PTY output to this WebSocket client
-  const wsDisposables = disposables.get(ws) ?? []
-  disposables.set(ws, wsDisposables)
-
-  wsDisposables.push(
-    session.onData((data: string) => {
-      const subs = subscriptions.get(ws)
-      if (subs?.has(session.id)) {
-        send(ws, { type: 'stdout', sessionId: session.id, data })
-      }
-    }),
-  )
-
-  // Stream session metadata updates to this WebSocket client
-  wsDisposables.push(
-    session.onUpdate((meta) => {
-      const subs = subscriptions.get(ws)
-      if (subs?.has(session.id)) {
-        send(ws, { type: 'session_update', sessionId: session.id, ...meta })
-      }
-    }),
-  )
-
-  // Notify client when the session exits
-  wsDisposables.push(
-    session.onExit((event) => {
-      send(ws, {
-        type: 'exit',
-        sessionId: session.id,
-        exitCode: event.exitCode,
-        signal: event.signal,
-      })
-
-      const subs = subscriptions.get(ws)
-      if (subs) {
-        subs.delete(session.id)
-      }
-    }),
-  )
+  wireSessionToClient(ws, session, ptyManager, subscriptions, disposables)
 }
 
 function handleSessionSubscribe(
@@ -385,13 +325,28 @@ function handleSessionSubscribe(
     return
   }
 
-  // Subscribe this client
+  // Skip if already subscribed
   const clientSubs = subscriptions.get(ws)
-  if (clientSubs) {
-    if (clientSubs.has(sessionId)) return // already subscribed
-    clientSubs.add(sessionId)
-  }
-  ptyManager.incrementAttached(sessionId)
+  if (clientSubs?.has(sessionId)) return
+
+  wireSessionToClient(ws, session, ptyManager, subscriptions, disposables)
+}
+
+/**
+ * Subscribes a WebSocket client to a PTY session: registers the subscription,
+ * sends current session info, replays the output buffer, and wires up live
+ * data/update/exit listeners.
+ */
+function wireSessionToClient(
+  ws: WebSocket,
+  session: PTYSession,
+  ptyManager: PTYManager,
+  subscriptions: SubscriptionMap,
+  disposables: DisposableMap,
+): void {
+  const clientSubs = subscriptions.get(ws)
+  if (clientSubs) clientSubs.add(session.id)
+  ptyManager.incrementAttached(session.id)
 
   // Send session info
   send(ws, {
@@ -404,7 +359,7 @@ function handleSessionSubscribe(
     status: session.status,
   })
 
-  // Replay buffer
+  // Replay output buffer
   for (const chunk of session.buffer) {
     send(ws, { type: 'stdout', sessionId: session.id, data: chunk })
   }
@@ -440,9 +395,7 @@ function handleSessionSubscribe(
         signal: event.signal,
       })
       const subs = subscriptions.get(ws)
-      if (subs) {
-        subs.delete(session.id)
-      }
+      if (subs) subs.delete(session.id)
     }),
   )
 }
@@ -492,8 +445,7 @@ function handleSessionRestart(
     // Auto-subscribe to the restarted session
     handleSessionSubscribe(ws, sessionId, ptyManager, subscriptions, disposables)
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Restart failed'
-    sendError(ws, errMsg)
+    sendError(ws, errorMessage(err, 'Restart failed'))
   }
 }
 
@@ -510,8 +462,7 @@ function handleSessionDetach(
     if (subs) subs.delete(sessionId)
     send(ws, { type: 'detached', sessionId })
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Detach failed'
-    sendError(ws, errMsg)
+    sendError(ws, errorMessage(err, 'Detach failed'))
   }
 }
 
@@ -524,8 +475,7 @@ function handleSessionRename(
   try {
     ptyManager.rename(sessionId, name)
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Rename failed'
-    sendError(ws, errMsg)
+    sendError(ws, errorMessage(err, 'Rename failed'))
   }
 }
 
@@ -537,8 +487,7 @@ function handleStdin(ws: WebSocket, sessionId: string, data: string, ptyManager:
   try {
     ptyManager.write(sessionId, data)
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Write failed'
-    sendError(ws, errMsg)
+    sendError(ws, errorMessage(err, 'Write failed'))
   }
 }
 
@@ -552,8 +501,7 @@ function handleResize(
   try {
     ptyManager.resize(sessionId, cols, rows)
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : 'Resize failed'
-    sendError(ws, errMsg)
+    sendError(ws, errorMessage(err, 'Resize failed'))
   }
 }
 

@@ -6,6 +6,7 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { YELLOW, DIM, RESET } from './ansi.js'
 
 interface McpOAuthEntry {
   serverName?: string
@@ -63,11 +64,11 @@ export function checkMcpHealth(): void {
     const hasRefresh = Boolean(entry.refreshToken)
 
     if (!token) {
-      warnings.push(`  \x1b[33m⚠\x1b[0m MCP "${serverName}" — no access token (OAuth incomplete)`)
+      warnings.push(`  ${YELLOW}⚠${RESET} MCP "${serverName}" — no access token (OAuth incomplete)`)
     } else if (expiresAt > 0 && expiresAt < now && !hasRefresh) {
       const expDate = new Date(expiresAt).toLocaleDateString()
       warnings.push(
-        `  \x1b[33m⚠\x1b[0m MCP "${serverName}" — token expired ${expDate}, no refresh token`,
+        `  ${YELLOW}⚠${RESET} MCP "${serverName}" — token expired ${expDate}, no refresh token`,
       )
     }
   }
@@ -76,17 +77,17 @@ export function checkMcpHealth(): void {
   for (const serverName of Object.keys(needsAuth)) {
     const hasEntry = Object.keys(mcpOAuth).some((k) => k.startsWith(serverName + '|'))
     if (!hasEntry) {
-      warnings.push(`  \x1b[33m⚠\x1b[0m MCP "${serverName}" — flagged as needing auth`)
+      warnings.push(`  ${YELLOW}⚠${RESET} MCP "${serverName}" — flagged as needing auth`)
     }
   }
 
   if (warnings.length > 0) {
     console.log('')
-    console.log('  \x1b[33mMCP auth issues detected:\x1b[0m')
+    console.log(`  ${YELLOW}MCP auth issues detected:${RESET}`)
     for (const w of warnings) {
       console.log(w)
     }
-    console.log('  \x1b[2m→ Re-auth from PC: cd <project> && claude\x1b[0m')
+    console.log(`  ${DIM}→ Re-auth from PC: cd <project> && claude${RESET}`)
     console.log('')
   }
 }

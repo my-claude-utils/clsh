@@ -141,6 +141,21 @@ export function useSessionManager(
     }
   }, [auth.isAuthenticated, auth.token])
 
+  /** Cleans up raw output buffers, headless terminals, and snapshot timers for a removed session. */
+  function cleanupSessionBuffers(sessionId: string): void {
+    rawOutputBuffers.current.delete(sessionId)
+    const term = headlessTerminals.current.get(sessionId)
+    if (term) {
+      term.dispose()
+      headlessTerminals.current.delete(sessionId)
+    }
+    const timer = snapshotTimers.current.get(sessionId)
+    if (timer) {
+      clearTimeout(timer)
+      snapshotTimers.current.delete(sessionId)
+    }
+  }
+
   function handleMessage(msg: ServerMessage): void {
     switch (msg.type) {
       case 'session': {
@@ -218,20 +233,7 @@ export function useSessionManager(
         setSessions((prev) => {
           const session = prev.find((s) => s.id === msg.sessionId)
           if (session?.status === 'exited') return prev // keep exited sessions visible
-
-          // Session is truly gone — cleanup buffers/terminals
-          rawOutputBuffers.current.delete(msg.sessionId)
-          const term = headlessTerminals.current.get(msg.sessionId)
-          if (term) {
-            term.dispose()
-            headlessTerminals.current.delete(msg.sessionId)
-          }
-          const timer = snapshotTimers.current.get(msg.sessionId)
-          if (timer) {
-            clearTimeout(timer)
-            snapshotTimers.current.delete(msg.sessionId)
-          }
-
+          cleanupSessionBuffers(msg.sessionId)
           return prev.filter((s) => s.id !== msg.sessionId)
         })
         break
@@ -240,17 +242,7 @@ export function useSessionManager(
       case 'detached': {
         // Session was detached (persists in tmux) — remove from UI but keep tmux alive
         setSessions((prev) => {
-          rawOutputBuffers.current.delete(msg.sessionId)
-          const term = headlessTerminals.current.get(msg.sessionId)
-          if (term) {
-            term.dispose()
-            headlessTerminals.current.delete(msg.sessionId)
-          }
-          const timer = snapshotTimers.current.get(msg.sessionId)
-          if (timer) {
-            clearTimeout(timer)
-            snapshotTimers.current.delete(msg.sessionId)
-          }
+          cleanupSessionBuffers(msg.sessionId)
           return prev.filter((s) => s.id !== msg.sessionId)
         })
         break

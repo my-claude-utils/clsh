@@ -5,8 +5,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { MessageBus } from '../lib/message-bus'
+import type { TriggerType } from '@clsh/shared'
 
-export type TriggerType = 'permission' | 'completion' | 'error' | 'custom' | 'session'
+export type { TriggerType }
 
 export interface InAppNotification {
   id: string

@@ -40,12 +40,14 @@ if (args[0] === 'setup') {
     npx clsh-dev notify-test  Send a test notification to all channels
     npx clsh-dev --help       Show this help message
 
-  Docs: https://github.com/my-claude-utils/clsh
+  Docs: https://github.com/cshumac/clsh
 `)
 } else if (args[0] === '--version' || args[0] === '-v') {
-  // Read version from package.json at build time isn't worth the complexity.
-  // Just hardcode and bump with releases.
-  console.log('clsh 0.1.0')
+  const { readFileSync } = await import('node:fs')
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8')) as {
+    version: string
+  }
+  console.log(`clsh ${pkg.version}`)
 } else {
   const { main } = await import('@clsh/agent')
   await main()

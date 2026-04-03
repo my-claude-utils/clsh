@@ -24,6 +24,7 @@ import { checkNetworkPersistence } from './power.js'
 import { NotificationManager } from './notifications/index.js'
 import { shouldSkipBootstrap } from './auth-config.js'
 import { checkMcpHealth } from './mcp-health.js'
+import { ORANGE, DIM, RESET } from './ansi.js'
 
 /**
  * Prevents macOS from sleeping while the agent is running.
@@ -170,8 +171,8 @@ export async function main(): Promise<void> {
   // 12. Print clean startup info
   if (skipBootstrap) {
     // Simple URL-only output for tailscale/persistent modes
-    const o = '\x1b[38;5;208m'
-    const r = '\x1b[0m'
+    const o = ORANGE
+    const r = RESET
     console.log('')
     console.log(`${o}  URL: ${r}${tunnel.url}`)
     if (config.authMode.mode === 'persistent' && config.authMode.token) {
@@ -222,9 +223,7 @@ export async function main(): Promise<void> {
     }
   })
   if (!skipBootstrap) {
-    const dim = '\x1b[2m'
-    const r = '\x1b[0m'
-    console.log(`${dim}  Press Enter to generate a new QR code${r}`)
+    console.log(`${DIM}  Press Enter to generate a new QR code${RESET}`)
     console.log('')
   }
 

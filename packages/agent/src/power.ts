@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process'
+import { ORANGE, DIM, RESET } from './ansi.js'
 
 /**
  * Checks if macOS is configured to keep network alive when the lid closes.
@@ -20,11 +21,6 @@ export function checkNetworkPersistence(): void {
     return // Can't read pmset, skip silently
   }
 
-  // ANSI colors matching the clsh startup style
-  const o = '\x1b[38;5;208m' // orange
-  const dim = '\x1b[2m'
-  const r = '\x1b[0m'
-
-  console.log(`${o}  Tip:${r} Wi-Fi may drop when you close the lid.`)
-  console.log(`${dim}  Run once to fix:${r} sudo pmset -c tcpkeepalive 1`)
+  console.log(`${ORANGE}  Tip:${RESET} Wi-Fi may drop when you close the lid.`)
+  console.log(`${DIM}  Run once to fix:${RESET} sudo pmset -c tcpkeepalive 1`)
 }
