@@ -25,8 +25,9 @@ export interface WebhookChannel {
 
 export type NotificationChannel = NtfyChannel | PushoverChannel | TelegramChannel | WebhookChannel
 
-/** Trigger types for notifications. */
-export type TriggerType = 'permission' | 'completion' | 'error' | 'custom' | 'session'
+/** Trigger types — canonical definition lives in @clsh/shared (wire protocol). */
+import type { TriggerType } from '@clsh/shared'
+export type { TriggerType }
 
 export interface CustomPattern {
   pattern: string
