@@ -6,8 +6,14 @@ import { basename } from 'node:path'
 import type { ShellType, DefaultableShell } from './types.js'
 import type { DbStatements } from './db.js'
 import type { NotificationManager } from './notifications/manager.js'
-import { stripAnsi } from './notifications/triggers.js'
+import { stripAnsi, PERMISSION_PATTERNS, ERROR_PATTERNS } from './notifications/triggers.js'
 import { CostTracker, type SessionCost } from './notifications/cost-tracker.js'
+
+/** Removes the first occurrence of `item` from `arr` (identity comparison). */
+function removeListener<T>(arr: T[], item: T): void {
+  const idx = arr.indexOf(item)
+  if (idx !== -1) arr.splice(idx, 1)
+}
 import {
   tmuxSessionExists,
   killTmuxSession,
@@ -321,17 +327,13 @@ export class PTYManager {
     }
   }
 
-  /** Simple attention patterns for status indicators (subset of notification triggers). */
+  /** Composed from the canonical PERMISSION_PATTERNS + ERROR_PATTERNS in triggers.ts,
+   *  plus mid-line fallbacks — the attention dot is cheap, so we cast a wider net. */
   private static readonly ATTENTION_PATTERNS = [
-    /Allow\s+\w+.*\?\s*\(Y\)es/i,
-    /Allow\s+tool\s+use/i,
-    /Do you want to proceed\?/i,
-    /\(y\/n\)/i,
-    /Allow\s+(Read|Write|Edit|Bash|Glob|Grep)/,
-    /\bERROR\b/,
-    /\bFAILED\b/,
-    /\bFAIL\b\s/,
-    /Traceback \(most recent call last\)/,
+    ...PERMISSION_PATTERNS,
+    ...ERROR_PATTERNS,
+    /\bERROR\b/, // mid-line fallback (e.g. "Step 3: ERROR ...")
+    /\bFAIL\b\s/, // mid-line fallback (e.g. "Step 1: FAIL ...")
   ]
 
   /** Check if output contains attention-worthy patterns. */
@@ -605,27 +607,18 @@ export class PTYManager {
       userRenamed: !!name,
       onData: (callback) => {
         dataListeners.push(callback)
-        return () => {
-          const idx = dataListeners.indexOf(callback)
-          if (idx !== -1) dataListeners.splice(idx, 1)
-        }
+        return () => removeListener(dataListeners, callback)
       },
       onExit: (callback) => {
         exitListeners.push(callback)
-        return () => {
-          const idx = exitListeners.indexOf(callback)
-          if (idx !== -1) exitListeners.splice(idx, 1)
-        }
+        return () => removeListener(exitListeners, callback)
       },
       onUpdate: (callback) => {
         const listeners = this.updateListeners.get(id)
         if (listeners) listeners.push(callback)
         return () => {
           const arr = this.updateListeners.get(id)
-          if (arr) {
-            const idx = arr.indexOf(callback)
-            if (idx !== -1) arr.splice(idx, 1)
-          }
+          if (arr) removeListener(arr, callback)
         }
       },
     }
@@ -737,27 +730,18 @@ export class PTYManager {
       userRenamed: false,
       onData: (callback) => {
         dataListeners.push(callback)
-        return () => {
-          const idx = dataListeners.indexOf(callback)
-          if (idx !== -1) dataListeners.splice(idx, 1)
-        }
+        return () => removeListener(dataListeners, callback)
       },
       onExit: (callback) => {
         exitListeners.push(callback)
-        return () => {
-          const idx = exitListeners.indexOf(callback)
-          if (idx !== -1) exitListeners.splice(idx, 1)
-        }
+        return () => removeListener(exitListeners, callback)
       },
       onUpdate: (callback) => {
         const listeners = this.updateListeners.get(sessionId)
         if (listeners) listeners.push(callback)
         return () => {
           const arr = this.updateListeners.get(sessionId)
-          if (arr) {
-            const idx = arr.indexOf(callback)
-            if (idx !== -1) arr.splice(idx, 1)
-          }
+          if (arr) removeListener(arr, callback)
         }
       },
     }

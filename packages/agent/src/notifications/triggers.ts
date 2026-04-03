@@ -45,7 +45,7 @@ export interface TriggerMatch {
 }
 
 // Permission prompt patterns that Claude Code emits
-const PERMISSION_PATTERNS = [
+export const PERMISSION_PATTERNS = [
   /Allow\s+\w+.*\?\s*\(Y\)es/i,
   /Allow\s+tool\s+use/i,
   /Do you want to proceed\?/i,
@@ -55,7 +55,7 @@ const PERMISSION_PATTERNS = [
 
 // Error patterns — anchored or context-qualified to reduce false positives
 // on code output, grep results, and build logs.
-const ERROR_PATTERNS = [
+export const ERROR_PATTERNS = [
   /^\s*ERROR\b/, // line starts with ERROR
   /^\s*\[?ERROR\]?[\s:]/, // [ERROR] or ERROR: at line start
   /\bFAILED\b/, // FAILED is specific enough

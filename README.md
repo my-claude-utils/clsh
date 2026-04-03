@@ -14,7 +14,7 @@ A real PTY on your machine, streamed to your pocket.
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-green?logo=node.js&logoColor=white)](https://nodejs.org)
 
-[Live Demo](https://clsh.dev) · [Getting Started](#quickstart) · [How It Works](#how-it-works) · [Contributing](CONTRIBUTING.md)
+[Getting Started](#quickstart) · [How It Works](#how-it-works) · [Contributing](CONTRIBUTING.md)
 
 <br />
 
@@ -124,9 +124,9 @@ See the [ngrok setup guide](docs/ngrok-setup.md) for details.
 
 ### Responsible disclosure
 
-Found a vulnerability? **Please report it.** See [SECURITY.md](SECURITY.md) for our disclosure policy, or email **security@clsh.dev** directly. We respond within 48 hours.
+Found a vulnerability? **Please report it.** See [SECURITY.md](SECURITY.md) for our disclosure policy. We respond within 48 hours.
 
-We believe in transparency. If you find something, [open a security advisory](https://github.com/my-claude-utils/clsh/security/advisories/new) or email us. We will credit all responsible disclosures.
+We believe in transparency. If you find something, [open a security advisory](https://github.com/cshumac/clsh/security/advisories/new). We will credit all responsible disclosures.
 
 ## Features
 
@@ -294,7 +294,7 @@ clsh/
 │   ├── web/       # Frontend: React + xterm.js + Tailwind + keyboard system
 │   └── cli/       # CLI entry point (npx clsh-dev)
 ├── apps/
-│   └── landing/   # Static landing page (clsh.dev)
+│   └── landing/   # Static landing page
 └── docs/
     └── images/    # Screenshots for README
 ```
@@ -355,6 +355,6 @@ MIT — see [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-**[clsh.dev](https://clsh.dev)** · Star this repo if clsh is useful to you
+Star this repo if clsh is useful to you
 
 </div>

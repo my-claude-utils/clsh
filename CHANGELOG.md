@@ -29,5 +29,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Session management** — Create, rename, close sessions; live preview in grid cards
 - **Port fallback** — Auto-probes up to 10 ports on EADDRINUSE
 - **Sensitive env stripping** — NGROK_AUTHTOKEN, RESEND_API_KEY, JWT_SECRET stripped from PTY children
-- **Landing page** — Static site at clsh.dev with interactive demo and video
+- **Landing page** — Static site with interactive demo and video
 - **OSS scaffolding** — MIT license, CONTRIBUTING.md, SECURITY.md, issue/PR templates, CI workflow

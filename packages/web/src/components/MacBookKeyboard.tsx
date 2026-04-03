@@ -1,25 +1,11 @@
-import { useKeyboardState } from '../hooks/useKeyboardState';
-import type { KeyDef } from '../hooks/useKeyboardState';
-import type { MacBookKeyboardProps } from '../lib/types';
+import { useKeyboardState } from '../hooks/useKeyboardState'
+import type { KeyDef } from '../hooks/useKeyboardState'
+import type { MacBookKeyboardProps } from '../lib/types'
+import { NUMBER_ROW } from '../lib/keyboard-rows'
 
 // ── Row definitions ──────────────────────────────────────────────────────────
 
-const ROW_1: KeyDef[] = [
-  { id: '`', label: '`', shiftLabel: '~', width: 1 },
-  { id: '1', label: '1', shiftLabel: '!', width: 1 },
-  { id: '2', label: '2', shiftLabel: '@', width: 1 },
-  { id: '3', label: '3', shiftLabel: '#', width: 1 },
-  { id: '4', label: '4', shiftLabel: '$', width: 1 },
-  { id: '5', label: '5', shiftLabel: '%', width: 1 },
-  { id: '6', label: '6', shiftLabel: '^', width: 1 },
-  { id: '7', label: '7', shiftLabel: '&', width: 1 },
-  { id: '8', label: '8', shiftLabel: '*', width: 1 },
-  { id: '9', label: '9', shiftLabel: '(', width: 1 },
-  { id: '0', label: '0', shiftLabel: ')', width: 1 },
-  { id: '-', label: '-', shiftLabel: '_', width: 1 },
-  { id: '=', label: '=', shiftLabel: '+', width: 1 },
-  { id: 'backspace', label: '\u232B', width: 2 },
-];
+const ROW_1 = [...NUMBER_ROW, { id: 'backspace', label: '\u232B', width: 2 }]
 
 const ROW_2: KeyDef[] = [
   { id: 'tab', label: 'tab', width: 1.5 },
@@ -36,7 +22,7 @@ const ROW_2: KeyDef[] = [
   { id: '[', label: '[', shiftLabel: '{', width: 1 },
   { id: ']', label: ']', shiftLabel: '}', width: 1 },
   { id: '\\', label: '\\', shiftLabel: '|', width: 1 },
-];
+]
 
 const ROW_3: KeyDef[] = [
   { id: 'caps', label: 'caps', width: 1.6 },
@@ -52,7 +38,7 @@ const ROW_3: KeyDef[] = [
   { id: ';', label: ';', shiftLabel: ':', width: 1 },
   { id: "'", label: "'", shiftLabel: '"', width: 1 },
   { id: 'return', label: 'return', width: 2.3 },
-];
+]
 
 const ROW_4: KeyDef[] = [
   { id: 'shift-left', label: '\u21E7', width: 2.2 },
@@ -67,7 +53,7 @@ const ROW_4: KeyDef[] = [
   { id: '.', label: '.', shiftLabel: '>', width: 1 },
   { id: '/', label: '/', shiftLabel: '?', width: 1 },
   { id: 'shift-right', label: '\u21E7', width: 2.6 },
-];
+]
 
 // ROW_5: arrow-up / arrow-down are rendered as a special stacked cluster, not inline
 const ROW_5: KeyDef[] = [
@@ -79,18 +65,18 @@ const ROW_5: KeyDef[] = [
   { id: 'cmd-right', label: '\u2318', width: 1.6 },
   { id: 'opt-right', label: 'opt', width: 1.1 },
   // arrow cluster is rendered separately
-];
+]
 
-const ARROW_LEFT: KeyDef = { id: 'arrow-left', label: '\u2190', width: 0.9 };
-const ARROW_RIGHT: KeyDef = { id: 'arrow-right', label: '\u2192', width: 0.9 };
-const ARROW_UP: KeyDef = { id: 'arrow-up', label: '\u2191', width: 0.9 };
-const ARROW_DOWN: KeyDef = { id: 'arrow-down', label: '\u2193', width: 0.9 };
+const ARROW_LEFT: KeyDef = { id: 'arrow-left', label: '\u2190', width: 0.9 }
+const ARROW_RIGHT: KeyDef = { id: 'arrow-right', label: '\u2192', width: 0.9 }
+const ARROW_UP: KeyDef = { id: 'arrow-up', label: '\u2191', width: 0.9 }
+const ARROW_DOWN: KeyDef = { id: 'arrow-down', label: '\u2193', width: 0.9 }
 
-const ALL_ROWS = [ROW_1, ROW_2, ROW_3, ROW_4, ROW_5];
+const ALL_ROWS = [ROW_1, ROW_2, ROW_3, ROW_4, ROW_5]
 
-const KEY_GAP = 3.5;
-const KEY_HEIGHT = 32;
-const HALF_KEY_HEIGHT = (KEY_HEIGHT - KEY_GAP) / 2;
+const KEY_GAP = 3.5
+const KEY_HEIGHT = 32
+const HALF_KEY_HEIGHT = (KEY_HEIGHT - KEY_GAP) / 2
 
 export function MacBookKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
   const {
@@ -102,13 +88,13 @@ export function MacBookKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
     handleTouchEnd,
     handleMouseDown,
     handleMouseUp,
-  } = useKeyboardState({ onKey });
+  } = useKeyboardState({ onKey })
 
   const renderKey = (keyDef: KeyDef, height: number = KEY_HEIGHT) => {
-    const isPressed = pressedKeys.has(keyDef.id);
-    const isActive = isModifierActive(keyDef.id);
-    const isFlashing = flashingKeys.has(keyDef.id);
-    const perKeyColor = perKeyColors[keyDef.id];
+    const isPressed = pressedKeys.has(keyDef.id)
+    const isActive = isModifierActive(keyDef.id)
+    const isFlashing = flashingKeys.has(keyDef.id)
+    const perKeyColor = perKeyColors[keyDef.id]
 
     return (
       <div
@@ -126,7 +112,8 @@ export function MacBookKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
           height,
           background: isFlashing
             ? '#f97316'
-            : perKeyColor ?? (isActive ? 'var(--key-active, #2a2a2e)' : 'var(--key-face, #1c1c1e)'),
+            : (perKeyColor ??
+              (isActive ? 'var(--key-active, #2a2a2e)' : 'var(--key-face, #1c1c1e)')),
           border: `1px solid ${isActive || isFlashing ? '#f97316' : 'var(--key-border, #303032)'}`,
           borderRadius: 4,
           boxShadow: isPressed
@@ -173,8 +160,8 @@ export function MacBookKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
           {keyDef.label}
         </span>
       </div>
-    );
-  };
+    )
+  }
 
   return (
     <div
@@ -224,5 +211,5 @@ export function MacBookKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
         </div>
       ))}
     </div>
-  );
+  )
 }

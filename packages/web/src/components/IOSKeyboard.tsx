@@ -10,27 +10,14 @@
  *   Row 6 (30px): fn ctrl opt cmd [space] ← ↑↓ →       (modifiers + arrows)
  */
 
-import { useKeyboardState } from '../hooks/useKeyboardState';
-import type { KeyDef } from '../hooks/useKeyboardState';
-import type { MacBookKeyboardProps } from '../lib/types';
+import { useKeyboardState } from '../hooks/useKeyboardState'
+import type { KeyDef } from '../hooks/useKeyboardState'
+import type { MacBookKeyboardProps } from '../lib/types'
+import { NUMBER_ROW } from '../lib/keyboard-rows'
 
 // ── Row definitions ──────────────────────────────────────────────────────────
 
-const ROW_1: KeyDef[] = [
-  { id: '`', label: '`', shiftLabel: '~', width: 1 },
-  { id: '1', label: '1', shiftLabel: '!', width: 1 },
-  { id: '2', label: '2', shiftLabel: '@', width: 1 },
-  { id: '3', label: '3', shiftLabel: '#', width: 1 },
-  { id: '4', label: '4', shiftLabel: '$', width: 1 },
-  { id: '5', label: '5', shiftLabel: '%', width: 1 },
-  { id: '6', label: '6', shiftLabel: '^', width: 1 },
-  { id: '7', label: '7', shiftLabel: '&', width: 1 },
-  { id: '8', label: '8', shiftLabel: '*', width: 1 },
-  { id: '9', label: '9', shiftLabel: '(', width: 1 },
-  { id: '0', label: '0', shiftLabel: ')', width: 1 },
-  { id: '-', label: '-', shiftLabel: '_', width: 1 },
-  { id: '=', label: '=', shiftLabel: '+', width: 1 },
-];
+const ROW_1 = NUMBER_ROW
 
 const ROW_2: KeyDef[] = [
   { id: 'q', label: 'q', width: 1 },
@@ -43,7 +30,7 @@ const ROW_2: KeyDef[] = [
   { id: 'i', label: 'i', width: 1 },
   { id: 'o', label: 'o', width: 1 },
   { id: 'p', label: 'p', width: 1 },
-];
+]
 
 const ROW_3: KeyDef[] = [
   { id: 'a', label: 'a', width: 1 },
@@ -55,7 +42,7 @@ const ROW_3: KeyDef[] = [
   { id: 'j', label: 'j', width: 1 },
   { id: 'k', label: 'k', width: 1 },
   { id: 'l', label: 'l', width: 1 },
-];
+]
 
 const ROW_4: KeyDef[] = [
   { id: 'shift-left', label: '\u21E7', width: 1.5 },
@@ -67,14 +54,14 @@ const ROW_4: KeyDef[] = [
   { id: 'n', label: 'n', width: 1 },
   { id: 'm', label: 'm', width: 1 },
   { id: 'backspace', label: '\u232B', width: 1.5 },
-];
+]
 
 const ROW_5: KeyDef[] = [
   { id: 'opt-left', label: 'opt', width: 1.1 },
   { id: 'cmd-left', label: '\u2318', width: 1.6 },
   { id: 'space', label: '', width: 5.5 },
   // arrow cluster + return rendered separately
-];
+]
 
 const ROW_6: KeyDef[] = [
   { id: 'tab', label: 'tab', width: 1 },
@@ -89,21 +76,21 @@ const ROW_6: KeyDef[] = [
   { id: '/', label: '/', shiftLabel: '?', width: 1 },
   { id: '\\', label: '\\', width: 1 },
   { id: '|', label: '|', width: 1 },
-];
+]
 
-const ARROW_LEFT: KeyDef = { id: 'arrow-left', label: '\u2190', width: 0.9 };
-const ARROW_RIGHT: KeyDef = { id: 'arrow-right', label: '\u2192', width: 0.9 };
-const ARROW_UP: KeyDef = { id: 'arrow-up', label: '\u2191', width: 0.9 };
-const ARROW_DOWN: KeyDef = { id: 'arrow-down', label: '\u2193', width: 0.9 };
+const ARROW_LEFT: KeyDef = { id: 'arrow-left', label: '\u2190', width: 0.9 }
+const ARROW_RIGHT: KeyDef = { id: 'arrow-right', label: '\u2192', width: 0.9 }
+const ARROW_UP: KeyDef = { id: 'arrow-up', label: '\u2191', width: 0.9 }
+const ARROW_DOWN: KeyDef = { id: 'arrow-down', label: '\u2193', width: 0.9 }
 
-const KEY_GAP = 5;
-const LETTER_ROW_HEIGHT = 38;
-const SMALL_ROW_HEIGHT = 30;
-const HALF_KEY_HEIGHT = (SMALL_ROW_HEIGHT - KEY_GAP) / 2;
+const KEY_GAP = 5
+const LETTER_ROW_HEIGHT = 38
+const SMALL_ROW_HEIGHT = 30
+const HALF_KEY_HEIGHT = (SMALL_ROW_HEIGHT - KEY_GAP) / 2
 
 // Helper to check if a key ID is a letter
 function isLetterKey(id: string): boolean {
-  return id.length === 1 && id >= 'a' && id <= 'z';
+  return id.length === 1 && id >= 'a' && id <= 'z'
 }
 
 export function IOSKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
@@ -116,18 +103,18 @@ export function IOSKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
     handleTouchEnd,
     handleMouseDown,
     handleMouseUp,
-  } = useKeyboardState({ onKey });
+  } = useKeyboardState({ onKey })
 
   const renderKey = (keyDef: KeyDef, height: number, fontSize: number, isLetter: boolean) => {
-    const isPressed = pressedKeys.has(keyDef.id);
-    const isActive = isModifierActive(keyDef.id);
-    const isFlashing = flashingKeys.has(keyDef.id);
-    const perKeyColor = perKeyColors[keyDef.id];
+    const isPressed = pressedKeys.has(keyDef.id)
+    const isActive = isModifierActive(keyDef.id)
+    const isFlashing = flashingKeys.has(keyDef.id)
+    const perKeyColor = perKeyColors[keyDef.id]
 
     // iOS behavior: letters show lowercase by default, uppercase when shifted
-    let displayLabel = keyDef.label;
+    let displayLabel = keyDef.label
     if (isLetter) {
-      displayLabel = isShifted ? keyDef.label.toUpperCase() : keyDef.label.toLowerCase();
+      displayLabel = isShifted ? keyDef.label.toUpperCase() : keyDef.label.toLowerCase()
     }
 
     return (
@@ -146,7 +133,8 @@ export function IOSKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
           height,
           background: isFlashing
             ? '#f97316'
-            : perKeyColor ?? (isActive ? 'var(--key-active, #1c1c1e)' : 'var(--key-face, #2c2c2e)'),
+            : (perKeyColor ??
+              (isActive ? 'var(--key-active, #1c1c1e)' : 'var(--key-face, #2c2c2e)')),
           border: `1px solid ${isActive || isFlashing ? '#f97316' : 'var(--key-border, #3a3a3c)'}`,
           borderRadius: 8,
           boxShadow: isPressed
@@ -194,8 +182,8 @@ export function IOSKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
           {displayLabel}
         </span>
       </div>
-    );
-  };
+    )
+  }
 
   const renderRow = (
     keys: KeyDef[],
@@ -241,7 +229,7 @@ export function IOSKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
         </>
       )}
     </div>
-  );
+  )
 
   return (
     <div
@@ -277,5 +265,5 @@ export function IOSKeyboard({ onKey, perKeyColors }: MacBookKeyboardProps) {
         {ROW_6.map((keyDef) => renderKey(keyDef, SMALL_ROW_HEIGHT, 10, false))}
       </div>
     </div>
-  );
+  )
 }

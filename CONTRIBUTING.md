@@ -7,7 +7,7 @@ Thanks for your interest in contributing to clsh! This guide will help you get s
 ## Development Setup
 
 ```bash
-git clone https://github.com/my-claude-utils/clsh
+git clone https://github.com/cshumac/clsh
 cd clsh
 cp .env.example .env          # Add your NGROK_AUTHTOKEN
 npm install                    # Installs all workspace deps + compiles node-pty
@@ -25,7 +25,7 @@ clsh/
 │   ├── web/        # Frontend — React + xterm.js + MacBook Pro UI
 │   └── cli/        # CLI wrapper — bootstraps and manages the agent
 ├── apps/
-│   └── landing/    # Landing page at clsh.dev (static HTML)
+│   └── landing/    # Landing page (static HTML)
 ├── turbo.json      # Turborepo task configuration
 └── package.json    # Root workspace config
 ```
@@ -97,7 +97,7 @@ docs: add ngrok setup instructions to README
 
 ## Reporting Bugs
 
-Open a [GitHub issue](https://github.com/my-claude-utils/clsh/issues/new?template=bug_report.yml) with:
+Open a [GitHub issue](https://github.com/cshumac/clsh/issues/new?template=bug_report.yml) with:
 
 - Your environment (OS, Node version, browser)
 - Steps to reproduce
@@ -106,7 +106,7 @@ Open a [GitHub issue](https://github.com/my-claude-utils/clsh/issues/new?templat
 
 ## Requesting Features
 
-Open a [GitHub issue](https://github.com/my-claude-utils/clsh/issues/new?template=feature_request.yml) describing:
+Open a [GitHub issue](https://github.com/cshumac/clsh/issues/new?template=feature_request.yml) describing:
 
 - The problem you're trying to solve
 - Your proposed solution

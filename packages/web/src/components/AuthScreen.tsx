@@ -1,9 +1,14 @@
-import { useState, useCallback, useEffect, useRef, type FormEvent } from 'react';
-import type { AuthState } from '../hooks/useAuth';
-import { QRScanner } from './QRScanner';
-import { useIsMobile } from '../hooks/useMediaQuery';
-import { IOSKeyboard } from './IOSKeyboard';
-import { restoreLockState, authenticateBiometric as localBiometricAuth, setupPassword, enableLock } from '../lib/lock-screen';
+import { useState, useCallback, useEffect, useRef, type FormEvent } from 'react'
+import type { AuthState } from '../hooks/useAuth'
+import { QRScanner } from './QRScanner'
+import { useIsMobile } from '../hooks/useMediaQuery'
+import { IOSKeyboard } from './IOSKeyboard'
+import {
+  restoreLockState,
+  authenticateBiometric as localBiometricAuth,
+  setupPassword,
+  enableLock,
+} from '../lib/lock-screen'
 
 // Same logo as LockScreen
 const LOGO_LINES = [
@@ -13,170 +18,194 @@ const LOGO_LINES = [
   '\u2588\u2588\u2551     \u2588\u2588\u2551     \u255a\u2550\u2550\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551',
   '\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551',
   ' \u255a\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d',
-];
+]
 
 interface ServerStatus {
-  configured: boolean;
-  biometricConfigured: boolean;
-  credentialId: string | null;
-  userId: string | null;
+  configured: boolean
+  biometricConfigured: boolean
+  credentialId: string | null
+  userId: string | null
 }
 
 interface AuthScreenProps {
-  auth: AuthState;
-  onBootstrapSubmit: (token: string) => Promise<boolean>;
-  onPasswordSubmit: (password: string) => Promise<boolean>;
-  onBiometricSubmit: (credentialId: string) => Promise<boolean>;
+  auth: AuthState
+  onBootstrapSubmit: (token: string) => Promise<boolean>
+  onPasswordSubmit: (password: string) => Promise<boolean>
+  onBiometricSubmit: (credentialId: string) => Promise<boolean>
 }
 
-export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiometricSubmit }: AuthScreenProps) {
-  const [bootstrapToken, setBootstrapToken] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [showScanner, setShowScanner] = useState(false);
-  const [showQRFallback, setShowQRFallback] = useState(false);
-  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
-  const isMobile = useIsMobile();
-  const passwordFieldRef = useRef<HTMLInputElement>(null);
+export function AuthScreen({
+  auth,
+  onBootstrapSubmit,
+  onPasswordSubmit,
+  onBiometricSubmit,
+}: AuthScreenProps) {
+  const [bootstrapToken, setBootstrapToken] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [showScanner, setShowScanner] = useState(false)
+  const [showQRFallback, setShowQRFallback] = useState(false)
+  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null)
+  const isMobile = useIsMobile()
+  const passwordFieldRef = useRef<HTMLInputElement>(null)
 
   // Check server-side auth status on mount
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
     fetch('/api/auth/password/status')
       .then((res) => res.json())
       .then((data: ServerStatus) => {
-        if (!cancelled) setServerStatus(data);
+        if (!cancelled) setServerStatus(data)
       })
       .catch(() => {
-        if (!cancelled) setServerStatus({ configured: false, biometricConfigured: false, credentialId: null, userId: null });
-      });
-    return () => { cancelled = true; };
-  }, []);
+        if (!cancelled)
+          setServerStatus({
+            configured: false,
+            biometricConfigured: false,
+            credentialId: null,
+            userId: null,
+          })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // After successful auth, restore local lock state so LockSetup is skipped
   const restoreAfterAuth = useCallback(async (pwd?: string) => {
     try {
-      const stored = localStorage.getItem('clsh_jwt');
+      const stored = localStorage.getItem('clsh_jwt')
       if (stored) {
         const resp = await fetch('/api/auth/lock/state', {
-          headers: { 'Authorization': `Bearer ${stored}` },
-        });
+          headers: { Authorization: `Bearer ${stored}` },
+        })
         if (resp.ok) {
-          const state = await resp.json() as {
-            biometricConfigured: boolean;
-            credentialId: string | null;
-            userId: string | null;
-            clientPwdHash: string | null;
-          };
-          const biometric = state.biometricConfigured && state.credentialId && state.userId
-            ? { credentialId: state.credentialId, userId: state.userId }
-            : null;
-          await restoreLockState(pwd ?? null, biometric, state.clientPwdHash);
+          const state = (await resp.json()) as {
+            biometricConfigured: boolean
+            credentialId: string | null
+            userId: string | null
+            clientPwdHash: string | null
+          }
+          const biometric =
+            state.biometricConfigured && state.credentialId && state.userId
+              ? { credentialId: state.credentialId, userId: state.userId }
+              : null
+          await restoreLockState(pwd ?? null, biometric, state.clientPwdHash)
         }
       }
     } catch {
       // Non-fatal
     }
-  }, []);
+  }, [])
 
   // ── Password handler ──
-  const handlePasswordSubmit = useCallback(async (e?: FormEvent) => {
-    e?.preventDefault();
-    const trimmed = password.trim();
-    if (!trimmed) return;
-    setError('');
+  const handlePasswordSubmit = useCallback(
+    async (e?: FormEvent) => {
+      e?.preventDefault()
+      const trimmed = password.trim()
+      if (!trimmed) return
+      setError('')
 
-    // Set up local lock state BEFORE auth state changes, so useLockScreen
-    // sees isLockEnabled()=true and doesn't trigger needsSetup.
-    await setupPassword(trimmed);
-    enableLock();
+      // Set up local lock state BEFORE auth state changes, so useLockScreen
+      // sees isLockEnabled()=true and doesn't trigger needsSetup.
+      await setupPassword(trimmed)
+      enableLock()
 
-    const success = await onPasswordSubmit(trimmed);
-    if (success) {
-      // Restore biometric credential from server (non-blocking)
-      void restoreAfterAuth(trimmed);
-    } else if (auth.error) {
-      setError(auth.error);
-    } else {
-      setError('Invalid password');
-    }
-  }, [password, onPasswordSubmit, auth.error, restoreAfterAuth]);
+      const success = await onPasswordSubmit(trimmed)
+      if (success) {
+        // Restore biometric credential from server (non-blocking)
+        void restoreAfterAuth(trimmed)
+      } else if (auth.error) {
+        setError(auth.error)
+      } else {
+        setError('Invalid password')
+      }
+    },
+    [password, onPasswordSubmit, auth.error, restoreAfterAuth],
+  )
 
   // ── Face ID handler ──
   const handleBiometric = useCallback(async () => {
-    if (!serverStatus?.credentialId || !serverStatus?.userId) return;
-    setError('');
+    if (!serverStatus?.credentialId || !serverStatus?.userId) return
+    setError('')
 
     // Write credential to localStorage temporarily so WebAuthn can find it
     try {
-      localStorage.setItem('clsh_lock_credential', serverStatus.credentialId);
-      localStorage.setItem('clsh_lock_user_id', serverStatus.userId);
-    } catch { /* ignore */ }
+      localStorage.setItem('clsh_lock_credential', serverStatus.credentialId)
+      localStorage.setItem('clsh_lock_user_id', serverStatus.userId)
+    } catch {
+      /* ignore */
+    }
 
     try {
-      const ok = await localBiometricAuth();
+      const ok = await localBiometricAuth()
       if (ok) {
         // Enable lock before auth state changes (same race condition fix)
-        enableLock();
+        enableLock()
 
-        const success = await onBiometricSubmit(serverStatus.credentialId);
+        const success = await onBiometricSubmit(serverStatus.credentialId)
         if (success) {
-          void restoreAfterAuth();
+          void restoreAfterAuth()
         } else {
-          setError('Authentication failed. Try your password.');
+          setError('Authentication failed. Try your password.')
         }
       } else {
-        setError('Face ID failed. Try again or use your password.');
+        setError('Face ID failed. Try again or use your password.')
       }
     } catch {
-      setError('Face ID failed. Try again or use your password.');
+      setError('Face ID failed. Try again or use your password.')
     }
-  }, [serverStatus, onBiometricSubmit, restoreAfterAuth]);
+  }, [serverStatus, onBiometricSubmit, restoreAfterAuth])
 
   // ── QR/bootstrap handlers ──
   const handleBootstrapSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    const trimmed = bootstrapToken.trim();
-    if (!trimmed) return;
-    await onBootstrapSubmit(trimmed);
-  };
+    e.preventDefault()
+    const trimmed = bootstrapToken.trim()
+    if (!trimmed) return
+    await onBootstrapSubmit(trimmed)
+  }
 
   const handlePaste = () => {
-    void navigator.clipboard.readText().then((text) => {
-      if (text) setBootstrapToken(text.trim());
-    }).catch(() => { /* clipboard unavailable */ });
-  };
+    void navigator.clipboard
+      .readText()
+      .then((text) => {
+        if (text) setBootstrapToken(text.trim())
+      })
+      .catch(() => {
+        /* clipboard unavailable */
+      })
+  }
 
   const handleQRScan = async (token: string) => {
-    setShowScanner(false);
-    setShowQRFallback(false);
-    const success = await onBootstrapSubmit(token);
-    if (!success) setBootstrapToken('');
-  };
+    setShowScanner(false)
+    setShowQRFallback(false)
+    const success = await onBootstrapSubmit(token)
+    if (!success) setBootstrapToken('')
+  }
 
   // IOSKeyboard handler for mobile password input
   const handleKey = useCallback(
     (data: string) => {
       if (data === '\r') {
-        void handlePasswordSubmit();
+        void handlePasswordSubmit()
       } else if (data === '\x7f') {
-        setPassword((v) => v.slice(0, -1));
+        setPassword((v) => v.slice(0, -1))
       } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
-        setPassword((v) => v + data);
+        setPassword((v) => v + data)
       }
     },
     [handlePasswordSubmit],
-  );
+  )
 
-  const masked = (val: string) => '\u2022'.repeat(val.length);
+  const masked = (val: string) => '\u2022'.repeat(val.length)
 
   // Still loading status
   if (serverStatus === null) {
-    return <div className="h-full bg-[#060606]" />;
+    return <div className="h-full bg-[#060606]" />
   }
 
-  const displayError = error || auth.error || '';
-  const hasBiometric = serverStatus.biometricConfigured && !!serverStatus.credentialId;
+  const displayError = error || auth.error || ''
+  const hasBiometric = serverStatus.biometricConfigured && !!serverStatus.credentialId
 
   // ══════════════════════════════════════════════════════════════
   // PASSWORD/BIOMETRIC CONFIGURED → Show LockScreen-style UI
@@ -184,7 +213,9 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
   if (serverStatus.configured) {
     return (
       <div className="fixed inset-0 z-40 flex flex-col" style={{ backgroundColor: '#060606' }}>
-        <div className={`flex flex-1 px-4 ${hasBiometric ? 'items-center justify-center' : 'items-start justify-center pt-[18vh]'}`}>
+        <div
+          className={`flex flex-1 px-4 ${hasBiometric ? 'items-center justify-center' : 'items-start justify-center pt-[18vh]'}`}
+        >
           <div className="w-full max-w-sm">
             {/* CLSH Logo (same as LockScreen) */}
             <div className={`${hasBiometric ? 'mb-10' : 'mb-4'} select-none text-center`}>
@@ -228,7 +259,8 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
             <div className="space-y-3">
               {isMobile ? (
                 <div className="w-full rounded-md border border-clsh-orange bg-clsh-surface px-3 py-2.5 text-sm text-white">
-                  {password ? masked(password) : ''}<span className="animate-pulse text-clsh-orange">|</span>
+                  {password ? masked(password) : ''}
+                  <span className="animate-pulse text-clsh-orange">|</span>
                 </div>
               ) : (
                 <input
@@ -236,7 +268,9 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') void handlePasswordSubmit(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handlePasswordSubmit()
+                  }}
                   placeholder="Password"
                   autoComplete="current-password"
                   autoFocus={!hasBiometric}
@@ -257,16 +291,13 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
             {displayError && (
               <p className="mt-3 text-center text-xs text-red-400">{displayError}</p>
             )}
-
           </div>
         </div>
 
         {/* iOS Keyboard for mobile password */}
-        {isMobile && (
-          <IOSKeyboard onKey={handleKey} skin="ios-terminal" perKeyColors={{}} />
-        )}
+        {isMobile && <IOSKeyboard onKey={handleKey} skin="ios-terminal" perKeyColors={{}} />}
       </div>
-    );
+    )
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -286,7 +317,9 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
           <div className="mb-8 text-center">
             <h1 className="text-2xl font-bold tracking-tight text-white">clsh</h1>
             <p className="mt-2 text-sm text-neutral-500">
-              {isMobile ? 'Scan the QR code from your terminal' : 'Paste the token shown in your terminal'}
+              {isMobile
+                ? 'Scan the QR code from your terminal'
+                : 'Paste the token shown in your terminal'}
             </p>
           </div>
 
@@ -307,8 +340,20 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
                 disabled={auth.loading}
                 className="flex w-full items-center justify-center gap-2 rounded-md bg-clsh-orange px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
                 </svg>
                 {auth.loading ? 'Connecting...' : 'Scan QR Code'}
               </button>
@@ -325,7 +370,7 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
 
               <div className="mt-8 text-center">
                 <a
-                  href="https://github.com/my-claude-utils/clsh"
+                  href="https://github.com/cshumac/clsh"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[13px] tracking-wide text-neutral-600 transition-colors hover:text-neutral-400"
@@ -338,7 +383,10 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
             <>
               <form onSubmit={(e) => void handleBootstrapSubmit(e)} className="space-y-4">
                 <div>
-                  <label htmlFor="bootstrap-token" className="mb-1.5 block text-xs font-medium text-neutral-400">
+                  <label
+                    htmlFor="bootstrap-token"
+                    className="mb-1.5 block text-xs font-medium text-neutral-400"
+                  >
                     One-Time Token
                   </label>
                   <div className="relative flex items-center">
@@ -386,12 +434,13 @@ export function AuthScreen({ auth, onBootstrapSubmit, onPasswordSubmit, onBiomet
               )}
 
               <p className="mt-6 text-center text-xs text-neutral-600">
-                Run <code className="text-neutral-400">npx clsh-dev</code> on your Mac, then copy the one-time token from the terminal output.
+                Run <code className="text-neutral-400">npx clsh-dev</code> on your Mac, then copy
+                the one-time token from the terminal output.
               </p>
             </>
           )}
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -24,7 +24,10 @@
       "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" pr*)",
       "Bash(\"C:\\Program Files\\GitHub CLI\\gh.exe\" issue*)",
       "Bash(npm run:*)",
-      "Bash(npx turbo:*)"
+      "Bash(npx turbo:*)",
+      "Bash(wsl:*)",
+      "WebSearch",
+      "Bash(rtk npm:*)"
     ]
   }
 }

@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/my-claude-utils/clsh.git",
+    "url": "https://github.com/cshumac/clsh.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://clsh.dev",
+  "homepage": "https://github.com/cshumac/clsh",
   "bugs": {
-    "url": "https://github.com/my-claude-utils/clsh/issues"
+    "url": "https://github.com/cshumac/clsh/issues"
   },
   "type": "module",
   "files": [
@@ -29,8 +29,8 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "@clsh/agent": "0.0.8",
-    "@clsh/web": "0.0.5"
+    "@clsh/agent": "0.0.9",
+    "@clsh/web": "0.0.6"
   },
   "devDependencies": {
     "tsx": "^4.19.0"

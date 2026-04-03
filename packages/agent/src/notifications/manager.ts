@@ -1,6 +1,7 @@
 import type { NotificationConfig, NotificationPayload } from './types.js'
 import { SessionMonitor } from './session-monitor.js'
 import { CooldownManager } from './cooldown.js'
+import { ORANGE, DIM, RESET } from '../ansi.js'
 
 type NotificationListener = (sessionId: string, payload: NotificationPayload) => void
 
@@ -87,9 +88,9 @@ export class NotificationManager {
 
   /** Print startup status to console. */
   printStatus(): void {
-    const o = '\x1b[38;5;208m'
-    const dim = '\x1b[2m'
-    const r = '\x1b[0m'
+    const o = ORANGE
+    const dim = DIM
+    const r = RESET
 
     if (!this.config.enabled) {
       return

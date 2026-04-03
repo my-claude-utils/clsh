@@ -8,7 +8,7 @@
 
 ### How to report
 
-
+Please use [GitHub's private vulnerability reporting](https://github.com/cshumac/clsh/security/advisories/new) to submit security issues. This ensures the report stays confidential until a fix is available.
 
 ### What to include
 

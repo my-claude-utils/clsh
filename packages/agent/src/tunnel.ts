@@ -3,6 +3,7 @@ import { networkInterfaces } from 'node:os'
 import ngrok from '@ngrok/ngrok'
 // @ts-expect-error -- qrcode-terminal has no type declarations
 import qrcode from 'qrcode-terminal'
+import { ORANGE, DIM, RESET } from './ansi.js'
 
 export type TunnelMethod = 'ngrok' | 'tailscale' | 'ssh' | 'local'
 
@@ -67,16 +68,19 @@ function runTailscaleCmd(
 }
 
 function getTailscaleFQDN(): string | null {
-  const { ok, stdout } = runTailscaleCmd(['status', '--json'], 3_000)
-  if (!ok) return null
-  try {
-    const status = JSON.parse(stdout) as { Self?: { DNSName?: string } }
-    const dnsName = status.Self?.DNSName
-    if (!dnsName) return null
-    return dnsName.replace(/\.$/, '')
-  } catch {
-    return null
+  // Try without sudo first, then with sudo (socket may be root-owned in WSL)
+  for (const sudo of [false, true] as const) {
+    const { ok, stdout } = runTailscaleCmd(['status', '--json'], 3_000, { sudo })
+    if (!ok) continue
+    try {
+      const status = JSON.parse(stdout) as { Self?: { DNSName?: string } }
+      const dnsName = status.Self?.DNSName
+      if (dnsName) return dnsName.replace(/\.$/, '')
+    } catch {
+      /* parse error, try next */
+    }
   }
+  return null
 }
 
 /**
@@ -85,31 +89,50 @@ function getTailscaleFQDN(): string | null {
  * userspace networking, where incoming connections to the Tailscale IP on
  * arbitrary ports may not be routed to local services.
  */
+/**
+ * Returns true if tailscaled is running locally (in WSL), as opposed to
+ * relying on a Windows-side Tailscale via WSL interop. `tailscale serve`
+ * only works when the daemon runs natively in the same OS context.
+ */
+function isTailscaledLocal(): boolean {
+  const result = spawnSync('pgrep', ['-x', 'tailscaled'], {
+    encoding: 'utf-8',
+    timeout: 2_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  return result.status === 0
+}
+
 function setupTailscaleServe(port: number): string | null {
   console.log('  Checking tailscale serve...')
+
+  // tailscale serve requires a local daemon — skip if using Windows-side Tailscale
+  console.log('  Checking for local tailscaled...')
+  if (!isTailscaledLocal()) {
+    console.log('  tailscale serve: no local tailscaled (using Windows Tailscale?), skipping')
+    return null
+  }
+
+  console.log('  Getting Tailscale FQDN...')
   const fqdn = getTailscaleFQDN()
   if (!fqdn) {
     console.log('  tailscale serve: could not get FQDN, skipping')
     return null
   }
+  console.log(`  FQDN: ${fqdn}`)
 
-  // Reset any previous serve config
-  const reset = runTailscaleCmd(['serve', 'reset'], 3_000)
-  if (!reset.ok) {
-    // Non-fatal — try sudo reset before giving up
-    const sudoReset = runTailscaleCmd(['serve', 'reset'], 3_000, { sudo: true })
-    if (!sudoReset.ok) {
-      console.log(
-        `  tailscale serve reset failed: ${(sudoReset.stderr || reset.stderr).trim() || 'unknown error'}`,
-      )
-    }
+  // Reset any previous serve config (non-fatal — may fail if nothing to reset)
+  console.log('  Resetting previous tailscale serve config...')
+  if (!runTailscaleCmd(['serve', 'reset'], 3_000).ok) {
+    runTailscaleCmd(['serve', 'reset'], 3_000, { sudo: true })
   }
 
-  let { ok, stderr } = runTailscaleCmd(['serve', '--bg', String(port)], 5_000)
+  console.log(`  Starting tailscale serve on port ${port}...`)
+  let { ok, stderr } = runTailscaleCmd(['serve', '--bg', String(port)], 10_000)
   if (!ok) {
     // Daemon socket is often root-owned in WSL — retry with sudo
     console.log(`  tailscale serve failed (${stderr.trim() || 'no output'}), retrying with sudo...`)
-    ;({ ok, stderr } = runTailscaleCmd(['serve', '--bg', String(port)], 5_000, { sudo: true }))
+    ;({ ok, stderr } = runTailscaleCmd(['serve', '--bg', String(port)], 10_000, { sudo: true }))
   }
   if (!ok) {
     console.log(
@@ -322,10 +345,9 @@ export function printAccessInfo(
 ): void {
   const authUrl = `${publicUrl}/#token=${bootstrapToken}`
 
-  // ANSI orange (256-color: 208)
-  const o = '\x1b[38;5;208m'
-  const dim = '\x1b[2m'
-  const r = '\x1b[0m'
+  const o = ORANGE
+  const dim = DIM
+  const r = RESET
 
   const textLines = [
     '', // top padding
@@ -335,7 +357,7 @@ export function printAccessInfo(
     `${o}   ██║     ██║     ╚════██║██╔══██║${r}`,
     `${o}   ╚██████╗███████╗███████║██║  ██║${r}`,
     `${o}    ╚═════╝╚══════╝╚══════╝╚═╝  ╚═╝${r}`,
-    `${dim}              clsh.dev${r}`,
+    `${dim}            terminal${r}`,
     ``,
     `${o}  Scan to connect ${dim}(token embedded in QR)${r}`,
     ``,
@@ -361,7 +383,7 @@ export function printAccessInfo(
   }
 
   textLines.push('')
-  textLines.push(`${dim}  GitHub: https://github.com/my-claude-utils/clsh${r}`)
+  textLines.push(`${dim}  GitHub: https://github.com/cshumac/clsh${r}`)
 
   console.clear()
 
@@ -371,16 +393,14 @@ export function printAccessInfo(
     if (qrLines.length > 0 && qrLines[qrLines.length - 1] === '') {
       qrLines.pop()
     }
-    const qrWidth = qrLines.length > 0 ? qrLines[0].length : 0
 
-    const maxLines = Math.max(qrLines.length, textLines.length)
+    // QR code alone at top — nothing beside it
     console.log('')
-    for (let i = 0; i < maxLines; i++) {
-      const qrPart = qrLines[i] || ''.padEnd(qrWidth, ' ')
-      const textPart = textLines[i] || ''
-      // Add 4 spaces padding between QR and text
-      console.log(`  ${qrPart}    ${textPart}`)
-    }
+    qrLines.forEach((line) => console.log(`  ${line}`))
+    console.log('')
+
+    // Orange clsh branding + connection info below
+    textLines.forEach((line) => console.log(line))
     console.log('')
   })
 }
@@ -393,8 +413,9 @@ export function printAccessInfo(
  */
 async function isTunnelAlive(): Promise<boolean> {
   if (tunnelDead || !currentTunnel) return false
-  // Tailscale and local IPs are stable — no health check needed
-  if (currentTunnel.method === 'local' || currentTunnel.method === 'tailscale') return true
+  if (currentTunnel.method === 'local') return true
+  // tailscale serve (HTTPS) gets health-checked; raw tailscale IP (HTTP) is assumed stable
+  if (currentTunnel.method === 'tailscale' && currentTunnel.url.startsWith('http://')) return true
   try {
     const res = await fetch(`${currentTunnel.url}/api/health`, {
       signal: AbortSignal.timeout(5_000),
@@ -436,8 +457,12 @@ export function startTunnelMonitor(
 ): () => void {
   const INTERVAL_MS = 5_000
   const WAKE_THRESHOLD_MS = 15_000
+  const HEALTH_CHECK_EVERY = 6 // every 30s (6 × 5s)
+  const FAILURE_THRESHOLD = 3 // recreate after 3 consecutive failures (~90s)
   let lastTick = Date.now()
   let recovering = false
+  let tickCount = 0
+  let consecutiveFailures = 0
 
   const check = async () => {
     if (recovering) return
@@ -446,33 +471,60 @@ export function startTunnelMonitor(
     const gap = now - lastTick - INTERVAL_MS
     lastTick = now
 
+    tickCount++
     const woke = gap > WAKE_THRESHOLD_MS
-    if (!woke && !tunnelDead) return
+    const periodicCheck = tickCount % HEALTH_CHECK_EVERY === 0
+    if (!woke && !tunnelDead && !periodicCheck) return
 
     recovering = true
 
     try {
       if (woke) {
+        // System woke from sleep — network may need a moment
         console.log(
           `  Wake detected (${Math.round((gap + INTERVAL_MS) / 1000)}s gap), checking tunnel...`,
         )
-        // Give the network interface a moment to come back up
         await new Promise<void>((r) => setTimeout(r, 3_000))
-      } else {
+        const alive = await isTunnelAlive()
+        if (alive) {
+          consecutiveFailures = 0
+          console.log('  Tunnel OK')
+        } else {
+          console.log('  Tunnel down after wake, recreating...')
+          const result = await recreate()
+          if (result) {
+            consecutiveFailures = 0
+            console.log(`  Tunnel recovered: ${result.url} (${result.method})`)
+            onRecovered(result.url, result.method)
+          }
+        }
+      } else if (tunnelDead) {
+        // SSH process (or similar) actually died — recreate immediately
         console.log('  Tunnel process died, restarting...')
         await new Promise<void>((r) => setTimeout(r, 2_000))
-      }
-
-      const alive = tunnelDead ? false : await isTunnelAlive()
-
-      if (alive) {
-        console.log('  Tunnel OK')
-      } else {
-        console.log('  Tunnel down, recreating...')
         const result = await recreate()
         if (result) {
+          consecutiveFailures = 0
           console.log(`  Tunnel recovered: ${result.url} (${result.method})`)
           onRecovered(result.url, result.method)
+        }
+      } else {
+        // Periodic health check — silent when healthy
+        const alive = await isTunnelAlive()
+        if (alive) {
+          consecutiveFailures = 0
+        } else {
+          consecutiveFailures++
+          console.log(`  Tunnel health check failed (${consecutiveFailures}/${FAILURE_THRESHOLD})`)
+          if (consecutiveFailures >= FAILURE_THRESHOLD) {
+            console.log('  Tunnel unresponsive, recreating...')
+            const result = await recreate()
+            if (result) {
+              consecutiveFailures = 0
+              console.log(`  Tunnel recovered: ${result.url} (${result.method})`)
+              onRecovered(result.url, result.method)
+            }
+          }
         }
       }
     } catch (err) {
@@ -507,6 +559,7 @@ export async function closeTunnel(): Promise<void> {
     if (!ok) runTailscaleCmd(['serve', 'reset'], 3_000, { sudo: true })
     activeTailscaleServe = false
   }
+  currentTunnel = null
   tunnelDead = false
 }
 
