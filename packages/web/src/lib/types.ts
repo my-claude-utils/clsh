@@ -77,6 +77,8 @@ export interface GridViewProps {
 
 export interface TerminalViewProps {
   session: Session
+  /** Whether this terminal is the currently visible (active) view. */
+  active: boolean
   wsClient: import('./ws-client').TerminalWSClient | null
   messageBus: import('./message-bus').MessageBus
   getSessionOutput: (sessionId: string) => string[]

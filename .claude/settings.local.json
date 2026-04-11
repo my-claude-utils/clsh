@@ -27,7 +27,11 @@
       "Bash(npx turbo:*)",
       "Bash(wsl:*)",
       "WebSearch",
-      "Bash(rtk npm:*)"
+      "Bash(rtk npm:*)",
+      "Bash(find /d/Dev/clsh/node_modules -name *.node -type f)",
+      "Bash(git:*)",
+      "Read(//mnt/d/Dev/**)",
+      "Bash(rtk git:*)"
     ]
   }
 }

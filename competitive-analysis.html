@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>clsh Competitive Analysis — Lessons from the Field</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #1a1a26;
+    --border: #2a2a3a;
+    --border-hover: #3a3a5a;
+    --text: #e4e4ef;
+    --text-dim: #8888a0;
+    --text-muted: #5a5a70;
+    --accent: #7c6aef;
+    --accent-dim: #5a4cc0;
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96,165,250,0.12);
+    --cyan: #22d3ee;
+    --pink: #f472b6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 60px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  .hero-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(124,106,239,0.1);
+    border: 1px solid rgba(124,106,239,0.2);
+    padding: 4px 14px;
+    border-radius: 100px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .hero p { color: var(--text-dim); font-size: 16px; max-width: 560px; margin: 0 auto; }
+
+  /* Sections */
+  section { margin-bottom: 56px; }
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .section-desc { color: var(--text-dim); margin-bottom: 24px; font-size: 15px; }
+
+  /* Competitor cards */
+  .competitors {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 700px) { .competitors { grid-template-columns: 1fr; } }
+
+  .comp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.2s;
+  }
+  .comp-card:hover { border-color: var(--border-hover); }
+  .comp-icon { font-size: 28px; margin-bottom: 10px; }
+  .comp-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .comp-card .tagline { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; }
+  .comp-card .tech-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tech-pill {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  /* Analogy callout */
+  .analogy {
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+  .analogy-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .analogy p { color: var(--text-dim); }
+
+  /* Strengths grid */
+  .strengths {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 600px) { .strengths { grid-template-columns: 1fr; } }
+  .strength {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .strength-icon { color: var(--green); font-size: 18px; margin-bottom: 6px; }
+  .strength h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .strength p { font-size: 13px; color: var(--text-dim); }
+
+  /* Ranked lessons */
+  .lesson {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .lesson:hover { border-color: var(--border-hover); }
+  .lesson-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .lesson-rank {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .rank-1 { background: linear-gradient(135deg, #34d399, #059669); color: #000; }
+  .rank-2 { background: linear-gradient(135deg, #60a5fa, #3b82f6); color: #000; }
+  .rank-3 { background: linear-gradient(135deg, #a78bfa, #7c3aed); color: #fff; }
+  .rank-4 { background: linear-gradient(135deg, #fbbf24, #d97706); color: #000; }
+  .rank-5 { background: linear-gradient(135deg, #f472b6, #db2777); color: #fff; }
+  .rank-6 { background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+
+  .lesson-title-area { flex: 1; min-width: 0; }
+  .lesson-title { font-size: 15px; font-weight: 600; }
+  .lesson-subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .lesson-badges { display: flex; gap: 6px; flex-shrink: 0; }
+  .badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 100px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .badge-effort-s { background: var(--green-dim); color: var(--green); }
+  .badge-effort-m { background: var(--amber-dim); color: var(--amber); }
+  .badge-effort-l { background: var(--red-dim); color: var(--red); }
+  .badge-source { background: var(--blue-dim); color: var(--blue); }
+
+  .lesson-chevron {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: var(--text-muted);
+    transition: transform 0.25s;
+  }
+  .lesson.open .lesson-chevron { transform: rotate(180deg); }
+
+  .lesson-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s ease;
+  }
+  .lesson.open .lesson-body { max-height: 800px; }
+  .lesson-content {
+    padding: 0 20px 20px 66px;
+  }
+  .lesson-content p { font-size: 14px; color: var(--text-dim); margin-bottom: 12px; }
+  .lesson-content strong { color: var(--text); font-weight: 600; }
+  .lesson-content ul {
+    list-style: none;
+    padding: 0;
+  }
+  .lesson-content li {
+    font-size: 13px;
+    color: var(--text-dim);
+    padding: 4px 0 4px 18px;
+    position: relative;
+  }
+  .lesson-content li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 11px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border-hover);
+  }
+
+  .rationale {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  .rationale-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .rationale p { color: var(--text-dim); margin: 0; }
+
+  /* Impact / effort matrix */
+  .matrix {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 24px;
+    position: relative;
+  }
+  .matrix h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .matrix-grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 0;
+    height: 320px;
+  }
+  .matrix-corner { width: 60px; }
+  .matrix-col-label {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    padding-bottom: 8px;
+  }
+  .matrix-row-label {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .matrix-cell {
+    border: 1px solid var(--border);
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+  }
+  .matrix-cell:nth-child(4) { border-radius: 8px 0 0 0; }
+  .matrix-cell:nth-child(5) { border-radius: 0 8px 0 0; }
+  .matrix-cell:nth-child(7) { border-radius: 0 0 0 8px; }
+  .matrix-cell:nth-child(8) { border-radius: 0 0 8px 0; }
+
+  .matrix-dot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: default;
+    position: relative;
+    transition: transform 0.15s;
+  }
+  .matrix-dot:hover { transform: scale(1.2); }
+  .matrix-dot .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--text);
+    z-index: 10;
+    pointer-events: none;
+  }
+  .matrix-dot:hover .tooltip { display: block; }
+
+  .matrix-quadrant-label {
+    position: absolute;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.25;
+    pointer-events: none;
+  }
+  .ql-tl { top: 6px; left: 8px; }
+  .ql-tr { top: 6px; right: 8px; }
+  .ql-bl { bottom: 6px; left: 8px; }
+  .ql-br { bottom: 6px; right: 8px; }
+
+  /* Skip list */
+  .skip-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  @media (max-width: 600px) { .skip-list { grid-template-columns: 1fr; } }
+  .skip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  .skip-x {
+    flex-shrink: 0;
+    color: var(--red);
+    font-weight: 700;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .skip-item strong { color: var(--text); }
+  .skip-item span { color: var(--text-dim); }
+
+  /* Philosophy spectrum */
+  .spectrum {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 8px;
+  }
+  .spectrum h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .spectrum-bar {
+    position: relative;
+    height: 48px;
+    background: linear-gradient(90deg, rgba(248,113,113,0.1) 0%, rgba(124,106,239,0.1) 50%, rgba(52,211,153,0.1) 100%);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .spectrum-label-left, .spectrum-label-right {
+    position: absolute;
+    top: -18px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+  }
+  .spectrum-label-left { left: 8px; }
+  .spectrum-label-right { right: 8px; }
+
+  .spectrum-pin {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .spectrum-pin-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid;
+  }
+  .spectrum-pin-label {
+    font-size: 10px;
+    font-weight: 600;
+    margin-top: 4px;
+    white-space: nowrap;
+  }
+  .spectrum-caption { font-size: 13px; color: var(--text-dim); margin-top: 8px; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding-top: 40px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  /* Scroll fade in */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.5s, transform 0.5s;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Hero -->
+  <div class="hero fade-in">
+    <div class="hero-badge">Competitive Analysis</div>
+    <h1>Lessons for clsh</h1>
+    <p>What Paseo and Claude Cockpit can teach us about running Claude Code reliably from an Android phone</p>
+  </div>
+
+  <!-- The Players -->
+  <section class="fade-in">
+    <div class="section-label">The Landscape</div>
+    <h2>Three Philosophies</h2>
+    <p class="section-desc">Same problem space, very different bets on what matters.</p>
+
+    <div class="analogy">
+      <div class="analogy-label">Analogy: Vehicles</div>
+      <p><strong>Cockpit</strong> is a workstation with multiple monitors &mdash; powerful but bolted to a desk. <strong>Paseo</strong> is a fully loaded SUV with every option &mdash; comfortable but heavy to maintain. <strong>clsh</strong> is a motorcycle &mdash; minimal, fast to start, goes anywhere. The question is: which SUV features belong on the motorcycle?</p>
+    </div>
+
+    <div class="competitors">
+      <div class="comp-card">
+        <div class="comp-icon">&#128187;</div>
+        <h3>Claude Cockpit</h3>
+        <div class="tagline">Desktop multi-session orchestrator. MCP-powered coordination. Local only.</div>
+        <div class="tech-pills">
+          <span class="tech-pill">Python / FastAPI</span>
+          <span class="tech-pill">Tauri 2</span>
+          <span class="tech-pill">MCP</span>
+          <span class="tech-pill">ConPTY</span>
+        </div>
+      </div>
+      <div class="comp-card" style="border-color: var(--accent-dim);">
+        <div class="comp-icon">&#128241;</div>
+        <h3>Paseo</h3>
+        <div class="tagline">Full-featured native app. Multi-provider, voice, E2EE, cross-device.</div>
+        <div class="tech-pills">
+          <span class="tech-pill">Expo / React Native</span>
+          <span class="tech-pill">CF Workers</span>
+          <span class="tech-pill">NaCl E2EE</span>
+          <span class="tech-pill">Sherpa STT</span>
+        </div>
+      </div>
+      <div class="comp-card" style="border-color: var(--green); border-width: 2px;">
+        <div class="comp-icon">&#9889;</div>
+        <h3>clsh</h3>
+        <div class="tagline">Zero-install mobile-first. Scan QR, get a real terminal on your phone.</div>
+        <div class="tech-pills">
+          <span class="tech-pill">TypeScript / Express</span>
+          <span class="tech-pill">node-pty</span>
+          <span class="tech-pill">tmux</span>
+          <span class="tech-pill">WebAuthn</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="spectrum">
+      <h3>Design Philosophy Spectrum</h3>
+      <div class="spectrum-bar">
+        <span class="spectrum-label-left">Heavyweight / Feature-rich</span>
+        <span class="spectrum-label-right">Lightweight / Focused</span>
+        <div class="spectrum-pin" style="left: 15%;">
+          <div class="spectrum-pin-dot" style="background: var(--blue); border-color: var(--blue);"></div>
+          <div class="spectrum-pin-label" style="color: var(--blue);">Paseo</div>
+        </div>
+        <div class="spectrum-pin" style="left: 35%;">
+          <div class="spectrum-pin-dot" style="background: var(--amber); border-color: var(--amber);"></div>
+          <div class="spectrum-pin-label" style="color: var(--amber);">Cockpit</div>
+        </div>
+        <div class="spectrum-pin" style="left: 82%;">
+          <div class="spectrum-pin-dot" style="background: var(--green); border-color: var(--green);"></div>
+          <div class="spectrum-pin-label" style="color: var(--green);">clsh</div>
+        </div>
+      </div>
+      <div class="spectrum-caption">clsh's position is its strength. The goal is to selectively adopt ideas without drifting left.</div>
+    </div>
+  </section>
+
+  <!-- What clsh already wins -->
+  <section class="fade-in">
+    <div class="section-label">Current Advantages</div>
+    <h2>What clsh Already Does Better</h2>
+    <p class="section-desc">Don't fix what isn't broken. These are genuine differentiators.</p>
+
+    <div class="strengths">
+      <div class="strength">
+        <div class="strength-icon">&#10003;</div>
+        <h4>4-Tier Tunnel Fallback</h4>
+        <p>ngrok &rarr; Tailscale &rarr; SSH &rarr; Wi-Fi. Paseo has a single relay. Cockpit is localhost-only. clsh works from anywhere, with real fallbacks.</p>
+      </div>
+      <div class="strength">
+        <div class="strength-icon">&#10003;</div>
+        <h4>tmux Session Persistence</h4>
+        <p>Real session survival across agent restarts, not PID recovery (Cockpit) or JSON snapshots (Paseo). Your Claude keeps running even if clsh crashes.</p>
+      </div>
+      <div class="strength">
+        <div class="strength-icon">&#10003;</div>
+        <h4>WebAuthn Biometric Auth</h4>
+        <p>Fingerprint to unlock, no passwords. Cockpit has no auth at all. Paseo uses ECDH key pairing &mdash; secure but not as ergonomic on mobile.</p>
+      </div>
+      <div class="strength">
+        <div class="strength-icon">&#10003;</div>
+        <h4>Zero-Install Web Client</h4>
+        <p>Scan a QR code and go. No App Store, no APK sideload, no Expo build. This is the motorcycle advantage &mdash; instant start.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ranked Lessons -->
+  <section class="fade-in">
+    <div class="section-label">Ranked Recommendations</div>
+    <h2>Lessons Worth Stealing</h2>
+    <p class="section-desc">Ordered by impact-per-effort. Click to expand rationale and details.</p>
+
+    <!-- #1 -->
+    <div class="lesson" onclick="this.classList.toggle('open')">
+      <div class="lesson-header">
+        <div class="lesson-rank rank-1">1</div>
+        <div class="lesson-title-area">
+          <div class="lesson-title">Aggressive Terminal Re-fitting</div>
+          <div class="lesson-subtitle">Fix the #1 Android annoyance: keyboard show/hide breaks the terminal</div>
+        </div>
+        <div class="lesson-badges">
+          <span class="badge badge-effort-s">Small effort</span>
+          <span class="badge badge-source">Paseo</span>
+        </div>
+        <svg class="lesson-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="lesson-body">
+        <div class="lesson-content">
+          <div class="analogy">
+            <div class="analogy-label">Analogy</div>
+            <p>Android's virtual keyboard is like a cat walking on your desk &mdash; it rearranges everything unpredictably. Paseo's solution is to just keep putting everything back every few milliseconds until the cat leaves.</p>
+          </div>
+          <p><strong>What Paseo does:</strong></p>
+          <ul>
+            <li>Staggered fit timeouts: 0, 16, 48, 120, 250, 500, 1000, 2000ms after mount</li>
+            <li>Periodic 250ms fit interval to catch missed resize events</li>
+            <li>Force re-fit on <code>visibilitychange</code> (critical for app resume on Android)</li>
+            <li><code>visualViewport</code> resize listener (keyboard show/hide)</li>
+            <li><code>-webkit-text-size-adjust: 100%</code> to prevent browser font scaling</li>
+            <li><code>overscroll-behavior: none</code> to kill pull-to-refresh</li>
+          </ul>
+          <div class="rationale">
+            <div class="rationale-label">Why #1</div>
+            <p>Highest impact-to-effort ratio. This is mostly CSS and a few event listeners &mdash; maybe 2 hours of work &mdash; but it fixes the most common "it feels broken on my phone" moments. The terminal not resizing when the keyboard opens/closes is the kind of paper cut that makes people give up.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- #2 -->
+    <div class="lesson" onclick="this.classList.toggle('open')">
+      <div class="lesson-header">
+        <div class="lesson-rank rank-2">2</div>
+        <div class="lesson-title-area">
+          <div class="lesson-title">Session State Tracking</div>
+          <div class="lesson-subtitle">Know which Claude sessions need your attention without reading output</div>
+        </div>
+        <div class="lesson-badges">
+          <span class="badge badge-effort-m">Medium effort</span>
+          <span class="badge badge-source">Cockpit</span>
+        </div>
+        <svg class="lesson-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="lesson-body">
+        <div class="lesson-content">
+          <div class="analogy">
+            <div class="analogy-label">Analogy</div>
+            <p>Right now, checking on your Claude sessions is like peeking through keyholes &mdash; you have to look at each one. State tracking gives you indicator lights above each door: green (done), yellow (thinking), red (needs you).</p>
+          </div>
+          <p><strong>What Cockpit does:</strong> Strips ANSI from PTY output, runs regex against Claude's known prompt patterns, classifies sessions as <strong>idle</strong>, <strong>busy</strong>, <strong>waiting for input</strong>, or <strong>starting</strong>. Uses a 10-second debounce to avoid false positives during Claude's thinking pauses.</p>
+          <p><strong>What clsh has today:</strong> Basic idle detection (<code>IDLE_THRESHOLD = 2500ms</code>) based on output activity, but no semantic understanding of what the session is doing, and no UI exposure.</p>
+          <p><strong>What to build:</strong> Parse output for Claude's prompt markers (the <code>$</code> / <code>></code> after it finishes, the "Thinking..." indicator). Surface state as colored dots on the session grid. Push notifications when a session transitions to "waiting."</p>
+          <div class="rationale">
+            <div class="rationale-label">Why #2</div>
+            <p>On a phone, context switching between sessions has real cost &mdash; you lose your scroll position, the keyboard might re-trigger, etc. Knowing which session actually needs you before tapping into it saves enormous friction. This is the biggest "quality of life" improvement for multi-session workflows on mobile.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- #3 -->
+    <div class="lesson" onclick="this.classList.toggle('open')">
+      <div class="lesson-header">
+        <div class="lesson-rank rank-3">3</div>
+        <div class="lesson-title-area">
+          <div class="lesson-title">Server-Side Terminal Snapshots</div>
+          <div class="lesson-subtitle">Instant reconnection instead of replaying thousands of buffer entries</div>
+        </div>
+        <div class="lesson-badges">
+          <span class="badge badge-effort-m">Medium effort</span>
+          <span class="badge badge-source">Paseo</span>
+        </div>
+        <svg class="lesson-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="lesson-body">
+        <div class="lesson-content">
+          <div class="analogy">
+            <div class="analogy-label">Analogy</div>
+            <p>Current reconnection is like rewatching a movie from the beginning to find where you left off. Server-side snapshots are like a bookmark &mdash; you open right to the current page.</p>
+          </div>
+          <p><strong>What Paseo does:</strong> Runs <code>@xterm/headless</code> server-side, mirrors all PTY output into it, then extracts the full terminal grid (cells with fg/bg colors, attributes, cursor position, scrollback) as a structured snapshot. On reconnect, the client receives one snapshot instead of replaying history.</p>
+          <p><strong>What clsh does today:</strong> Buffers up to 50,000 entries per session and replays them on reconnect. On a flaky mobile connection that drops and reconnects frequently, this means potentially replaying megabytes of ANSI data each time.</p>
+          <p><strong>Implementation:</strong> Add <code>@xterm/headless</code> as a server dependency. Feed PTY output to the headless terminal in parallel with the WebSocket. On client connect/reconnect, call <code>extractGrid()</code> and send a single snapshot message. Delta streaming after that.</p>
+          <div class="rationale">
+            <div class="rationale-label">Why #3</div>
+            <p>Mobile connections drop. A lot. Every reconnection that takes 3 seconds instead of 200ms erodes trust in the tool. This also enables a future feature: multiple clients viewing the same session simultaneously (e.g., pair programming from two phones). The effort is real but contained &mdash; the server-side change is isolated to PTY output handling.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- #4 -->
+    <div class="lesson" onclick="this.classList.toggle('open')">
+      <div class="lesson-header">
+        <div class="lesson-rank rank-4">4</div>
+        <div class="lesson-title-area">
+          <div class="lesson-title">Voice Input (Web Speech API)</div>
+          <div class="lesson-subtitle">Dictate prompts instead of thumb-typing on glass</div>
+        </div>
+        <div class="lesson-badges">
+          <span class="badge badge-effort-s">Small MVP</span>
+          <span class="badge badge-source">Paseo</span>
+        </div>
+        <svg class="lesson-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="lesson-body">
+        <div class="lesson-content">
+          <div class="analogy">
+            <div class="analogy-label">Analogy</div>
+            <p>Typing a paragraph-long prompt to Claude on a phone keyboard is like eating soup with a fork &mdash; technically possible, but there's a better utensil right there. Android Chrome supports the Web Speech API natively.</p>
+          </div>
+          <p><strong>What Paseo does:</strong> Full STT pipeline with three backends (Sherpa-ONNX local, Deepgram, OpenAI Realtime), custom Expo audio modules, and bidirectional TTS. Massive investment.</p>
+          <p><strong>What clsh could do as MVP:</strong> A single microphone button that uses the browser's built-in <code>SpeechRecognition</code> API. Transcribed text goes into the terminal input. Works in Chrome on Android today, zero server changes. Maybe 50 lines of code.</p>
+          <p>A more advanced version could detect when Claude is waiting for input and auto-focus the dictation, or add a "speak to Claude" mode that wraps the transcribed text in a prompt format.</p>
+          <div class="rationale">
+            <div class="rationale-label">Why #4</div>
+            <p>The MVP is nearly free &mdash; browser API, no server changes, no dependencies. But it's ranked below state tracking and snapshots because those fix reliability issues, while voice is an ergonomics upgrade. Reliability first, then comfort. That said, for the "on the go" use case (walking, commuting), voice input could be transformative.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- #5 -->
+    <div class="lesson" onclick="this.classList.toggle('open')">
+      <div class="lesson-header">
+        <div class="lesson-rank rank-5">5</div>
+        <div class="lesson-title-area">
+          <div class="lesson-title">MCP Orchestrator</div>
+          <div class="lesson-subtitle">Let one Claude command the others &mdash; your phone becomes a control tower</div>
+        </div>
+        <div class="lesson-badges">
+          <span class="badge badge-effort-l">Large effort</span>
+          <span class="badge badge-source">Cockpit</span>
+        </div>
+        <svg class="lesson-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="lesson-body">
+        <div class="lesson-content">
+          <div class="analogy">
+            <div class="analogy-label">Analogy</div>
+            <p>Right now clsh gives you walkie-talkies to talk to each Claude individually. The MCP orchestrator gives you an air traffic controller who talks to all of them on your behalf &mdash; you just tell the controller what you want.</p>
+          </div>
+          <p><strong>What Cockpit does:</strong> An MCP server script exposes 5 tools (<code>list_sessions</code>, <code>send_input</code>, <code>get_output</code>, <code>get_state</code>, <code>create_session</code>). One Claude session is designated as "orchestrator" and gets these tools via <code>--mcp-config-path</code>. It can spawn workers, send them instructions, and poll their output.</p>
+          <p><strong>Why it fits clsh:</strong> clsh already has multi-session infrastructure &mdash; session CRUD, WebSocket routing, PTY management. The MCP server would be a thin wrapper over existing APIs. The big unlock: from your phone, you tell one Claude "refactor the auth module, run tests in another session, and fix any failures" &mdash; and it coordinates everything while you walk to the coffee shop.</p>
+          <p><strong>Scope:</strong> MCP server binary (~200 lines), Claude config generation, UI for designating orchestrator sessions. Requires #2 (state tracking) to work well.</p>
+          <div class="rationale">
+            <div class="rationale-label">Why #5</div>
+            <p>This is the feature that changes what clsh <em>is</em> &mdash; from a remote terminal to a remote command center. But it's ranked 5th because it depends on state tracking (#2) and benefits from snapshots (#3), so the foundations should come first. It's also the largest single investment. Save this for when the mobile basics are rock-solid.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- #6 -->
+    <div class="lesson" onclick="this.classList.toggle('open')">
+      <div class="lesson-header">
+        <div class="lesson-rank rank-6">6</div>
+        <div class="lesson-title-area">
+          <div class="lesson-title">E2E Encryption</div>
+          <div class="lesson-subtitle">Application-layer crypto so no tunnel provider can read your traffic</div>
+        </div>
+        <div class="lesson-badges">
+          <span class="badge badge-effort-m">Medium effort</span>
+          <span class="badge badge-source">Paseo</span>
+        </div>
+        <svg class="lesson-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"/></svg>
+      </div>
+      <div class="lesson-body">
+        <div class="lesson-content">
+          <div class="analogy">
+            <div class="analogy-label">Analogy</div>
+            <p>TLS through ngrok is like mailing a sealed letter through a courier &mdash; the courier <em>promises</em> not to open it. E2EE is like putting the letter in a lockbox where only you and the recipient have the key. The courier couldn't read it even if they wanted to.</p>
+          </div>
+          <p><strong>What Paseo does:</strong> ECDH key exchange via NaCl/TweetNaCl during pairing. The QR code includes the server's public key. After handshake, all WebSocket frames are encrypted with XSalsa20-Poly1305 using the derived shared key. The Cloudflare relay only sees ciphertext.</p>
+          <p><strong>What clsh could do:</strong> Embed server's ECDH public key in the QR URL. Client generates keypair, sends its public key in the first WebSocket message. Derive shared key, encrypt all subsequent frames. Uses the Web Crypto API on the client side (no extra dependencies).</p>
+          <div class="rationale">
+            <div class="rationale-label">Why #6</div>
+            <p>Nice-to-have, not need-to-have. With Tailscale (WireGuard) or SSH tunnels, clsh already has strong transport encryption. E2EE matters most on the ngrok path, where you're trusting a third party. Ranked last because it doesn't improve the day-to-day mobile UX &mdash; it's a defense-in-depth layer. Worth building once everything else is solid.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Impact/Effort Matrix -->
+    <div class="matrix fade-in">
+      <h3>Impact vs. Effort Matrix</h3>
+      <div class="matrix-grid">
+        <div class="matrix-corner"></div>
+        <div class="matrix-col-label">Low Effort</div>
+        <div class="matrix-col-label">High Effort</div>
+
+        <div class="matrix-row-label">High Impact</div>
+        <div class="matrix-cell" style="background: rgba(52,211,153,0.04);">
+          <span class="matrix-quadrant-label ql-tl" style="color: var(--green);">Do First</span>
+          <div class="matrix-dot rank-1"><span class="tooltip">1. Re-fitting</span>1</div>
+          <div class="matrix-dot rank-4"><span class="tooltip">4. Voice Input</span>4</div>
+        </div>
+        <div class="matrix-cell" style="background: rgba(251,191,36,0.04);">
+          <span class="matrix-quadrant-label ql-tr" style="color: var(--amber);">Plan Carefully</span>
+          <div class="matrix-dot rank-2"><span class="tooltip">2. State Tracking</span>2</div>
+          <div class="matrix-dot rank-3"><span class="tooltip">3. Snapshots</span>3</div>
+          <div class="matrix-dot rank-5"><span class="tooltip">5. MCP Orchestrator</span>5</div>
+        </div>
+
+        <div class="matrix-row-label">Low Impact</div>
+        <div class="matrix-cell" style="background: rgba(124,106,239,0.04);">
+          <span class="matrix-quadrant-label ql-bl" style="color: var(--text-muted);">Nice to have</span>
+          <div class="matrix-dot rank-6" style="opacity:0.7;"><span class="tooltip">7. Touch scroll</span>7</div>
+        </div>
+        <div class="matrix-cell" style="background: rgba(248,113,113,0.04);">
+          <span class="matrix-quadrant-label ql-br" style="color: var(--red);">Avoid</span>
+          <div class="matrix-dot rank-6" style="opacity:0.7;"><span class="tooltip">6. E2E Encryption</span>6</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What to skip -->
+  <section class="fade-in">
+    <div class="section-label">Discipline</div>
+    <h2>What NOT to Adopt</h2>
+    <p class="section-desc">Equally important: knowing which features would pull clsh off its axis.</p>
+
+    <div class="analogy">
+      <div class="analogy-label">Analogy</div>
+      <p>A motorcycle that tries to become an SUV just becomes a bad SUV. These features would add weight without serving the "grab your phone, fix the thing" mission.</p>
+    </div>
+
+    <div class="skip-list">
+      <div class="skip-item">
+        <span class="skip-x">&times;</span>
+        <div><strong>Native app (Expo/RN)</strong><br><span>Web-only is a feature. No App Store approval, no install step, no update lag. The QR-to-terminal flow is clsh's killer UX.</span></div>
+      </div>
+      <div class="skip-item">
+        <span class="skip-x">&times;</span>
+        <div><strong>Electron desktop</strong><br><span>Not the target use case. If you're at your desk, just use the terminal directly.</span></div>
+      </div>
+      <div class="skip-item">
+        <span class="skip-x">&times;</span>
+        <div><strong>Multi-provider support</strong><br><span>Paseo supports Claude + Codex + OpenCode. clsh is Claude-focused &mdash; that simplicity is a feature, not a gap.</span></div>
+      </div>
+      <div class="skip-item">
+        <span class="skip-x">&times;</span>
+        <div><strong>JSON file persistence</strong><br><span>SQLite + tmux is strictly more robust than Paseo's JSON approach. Don't downgrade.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <div class="footer fade-in">
+    <p>clsh competitive analysis &mdash; Generated March 29, 2026</p>
+    <p style="margin-top: 4px;">Sources: <a href="https://github.com/getpaseo/paseo" style="color:var(--accent);">Paseo</a> &middot; <a href="https://github.com/NovemberFalls/claude-cockpit" style="color:var(--accent);">Claude Cockpit</a></p>
+  </div>
+</div>
+
+<script>
+// Scroll fade-in observer
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+
+// Auto-open first lesson
+document.querySelector('.lesson').classList.add('open');
+</script>
+</body>
+</html>

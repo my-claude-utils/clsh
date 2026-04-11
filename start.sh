@@ -57,10 +57,6 @@ for f in settings.json settings.local.json .mcp.json; do
 done
 
 # Merge credentials (preserves MCP OAuth tokens from both platforms)
-# .credentials.json contains mcpOAuth entries that may differ between Windows
-# and WSL — e.g., a token obtained in WSL after "claude mcp add" wouldn't exist
-# on Windows. A blind copy would clobber it. Instead, merge mcpOAuth entries
-# and keep whichever side has a valid (non-empty) access token.
 python3 -c "
 import json, os, sys
 
@@ -131,7 +127,6 @@ if wrote_back and os.path.exists(win_path):
 chmod 600 "$WSL_CLAUDE/.credentials.json"
 
 # Sync global state (~/.claude.json) — merge onboarding flags from Windows
-# so Claude Code doesn't re-trigger the first-run wizard
 WIN_GLOBAL="/mnt/c/Users/Chris/.claude.json"
 WSL_GLOBAL="$HOME/.claude.json"
 if [ -f "$WIN_GLOBAL" ]; then
@@ -162,6 +157,29 @@ fi
 
 echo "Claude Code state synced ✓"
 
+# ── Sync Gemini CLI state from Windows → WSL ──
+WIN_GEMINI="/mnt/c/Users/Chris/.gemini"
+WSL_GEMINI="$HOME/.gemini"
+
+# Remove old NTFS symlink if present
+if [ -L "$WSL_GEMINI" ]; then
+    echo "Removing NTFS symlink at $WSL_GEMINI..."
+    rm "$WSL_GEMINI"
+fi
+
+mkdir -p "$WSL_GEMINI"
+chmod 700 "$WSL_GEMINI"
+
+# Sync essential Gemini config files
+for f in oauth_creds.json google_accounts.json settings.json installation_id projects.json trustedFolders.json; do
+    if [ -f "$WIN_GEMINI/$f" ]; then
+        cp "$WIN_GEMINI/$f" "$WSL_GEMINI/$f"
+        chmod 600 "$WSL_GEMINI/$f"
+    fi
+done
+
+echo "Gemini CLI state synced ✓"
+
 # ── Install deps on WSL native filesystem ──
 cd ~/clsh
 if [ ! -d node_modules ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
@@ -174,8 +192,6 @@ export TUNNEL=tailscale
 export WEB_PORT=4031
 
 # Run inside a host-level tmux so clsh survives the terminal window closing.
-# Kill any stale clsh-server session first — `-A` would silently reattach to a
-# dead session, causing the agent to never start (only Vite HMR output visible).
 if command -v tmux &>/dev/null && [ -z "$TMUX" ]; then
     tmux kill-session -t clsh-server 2>/dev/null || true
     exec tmux new-session -s clsh-server "npm run dev"

@@ -8,7 +8,7 @@ import type { Session } from '../lib/types'
 import type { ServerMessage } from '../lib/protocol'
 
 /** Max raw output chunks stored per session for history replay. */
-const MAX_RAW_CHUNKS = 500
+const MAX_RAW_CHUNKS = 5_000
 
 /** Debounce time for auto-snapshot (ms). */
 const SNAPSHOT_DEBOUNCE = 300

@@ -50,6 +50,30 @@ export function App() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
+  // Track which sessions have been opened in terminal view — their TerminalView
+  // stays mounted (hidden) so xterm.js preserves scrollback across view switches.
+  const [mountedSessionIds, setMountedSessionIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (activeSessionId) {
+      setMountedSessionIds((prev) => {
+        if (prev.has(activeSessionId)) return prev
+        const next = new Set(prev)
+        next.add(activeSessionId)
+        return next
+      })
+    }
+  }, [activeSessionId])
+
+  // Remove closed sessions from mounted set
+  useEffect(() => {
+    setMountedSessionIds((prev) => {
+      const sessionIds = new Set(sessions.map((s) => s.id))
+      const next = new Set([...prev].filter((id) => sessionIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [sessions])
+
   // Splash screen state — rendered as overlay so hooks always run
   const [splashDone, setSplashDone] = useState(false)
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
@@ -191,33 +215,16 @@ export function App() {
       />
     )
   } else if (view === 'terminal' && activeSession) {
-    content = (
-      <>
-        <TerminalView
-          session={activeSession}
-          wsClient={wsClient}
-          messageBus={messageBus}
-          getSessionOutput={getSessionOutput}
-          onBack={handleBack}
-          onOpenSkinStudio={handleOpenSkinStudio}
-          onOpenSettings={handleOpenSettings}
-          onRenameSession={renameSession}
-          skin={skin}
-          perKeyColors={perKeyColors}
-          nativeKeyboard={nativeKeyboard}
-          terminalTheme={terminalTheme}
-        />
-        {settingsOpen && (
-          <SettingsPanel
-            onClose={handleCloseSettings}
-            onOpenSkinStudio={handleOpenSkinStudio}
-            sessionCount={sessions.length}
-            themeId={themeId}
-            onThemeChange={setThemeId}
-          />
-        )}
-      </>
-    )
+    // Terminal content is rendered persistently below — only settings overlay here
+    content = settingsOpen ? (
+      <SettingsPanel
+        onClose={handleCloseSettings}
+        onOpenSkinStudio={handleOpenSkinStudio}
+        sessionCount={sessions.length}
+        themeId={themeId}
+        onThemeChange={setThemeId}
+      />
+    ) : null
   } else if (view === 'skin-studio') {
     content = (
       <SkinStudio
@@ -258,6 +265,35 @@ export function App() {
   return (
     <>
       {content}
+
+      {/* Persistent terminal views — stay mounted (hidden) so xterm.js preserves
+          scrollback when switching between grid and terminal views. */}
+      {auth.isAuthenticated &&
+        !needsSetup &&
+        Array.from(mountedSessionIds).map((sessionId) => {
+          const session = sessions.find((s) => s.id === sessionId)
+          if (!session) return null
+          const isActive = view === 'terminal' && sessionId === activeSessionId
+          return (
+            <TerminalView
+              key={sessionId}
+              session={session}
+              active={isActive}
+              wsClient={wsClient}
+              messageBus={messageBus}
+              getSessionOutput={getSessionOutput}
+              onBack={handleBack}
+              onOpenSkinStudio={handleOpenSkinStudio}
+              onOpenSettings={handleOpenSettings}
+              onRenameSession={renameSession}
+              skin={skin}
+              perKeyColors={perKeyColors}
+              nativeKeyboard={nativeKeyboard}
+              terminalTheme={terminalTheme}
+            />
+          )
+        })}
+
       <NotificationToast notifications={notifications} onDismiss={dismissNotification} />
       {isLocked && auth.isAuthenticated && !needsSetup && (
         <LockScreen hasBiometric={hasBiometric} onUnlock={unlock} />

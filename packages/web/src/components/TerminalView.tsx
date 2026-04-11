@@ -17,6 +17,7 @@ import type { TerminalViewProps } from '../lib/types'
  */
 export function TerminalView({
   session,
+  active,
   wsClient,
   messageBus,
   getSessionOutput,
@@ -29,10 +30,21 @@ export function TerminalView({
   terminalTheme,
 }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const { terminal, write, getDimensions, captureScreen, scrollToBottom } = useTerminal(
+  const { terminal, write, getDimensions, fit, captureScreen, scrollToBottom } = useTerminal(
     containerRef,
     { nativeKeyboard, theme: terminalTheme },
   )
+  const activeRef = useRef(active)
+  activeRef.current = active
+
+  // Re-fit terminal when becoming visible (container goes from display:none to flex)
+  const prevActiveRef = useRef(active)
+  useEffect(() => {
+    if (active && !prevActiveRef.current && terminal) {
+      fit()
+    }
+    prevActiveRef.current = active
+  }, [active, terminal, fit])
 
   // Pinned commands for this session — fetched once on mount, matched by initial name
   const [pinnedCommands, setPinnedCommands] = useState<PinnedCommand[]>([])
@@ -97,11 +109,12 @@ export function TerminalView({
     return unsubscribe
   }, [terminal, messageBus, session.id, write, getSessionOutput])
 
-  // Wire terminal resize to WebSocket
+  // Wire terminal resize to WebSocket (only send when this terminal is active)
   useEffect(() => {
     if (!terminal || !wsClient) return
 
     const onResizeDisposable = terminal.onResize((size: { cols: number; rows: number }) => {
+      if (!activeRef.current || size.cols <= 0 || size.rows <= 0) return
       wsClient.send({
         type: 'resize',
         sessionId: session.id,
@@ -110,20 +123,22 @@ export function TerminalView({
       })
     })
 
-    const dims = getDimensions()
-    if (dims) {
-      wsClient.send({
-        type: 'resize',
-        sessionId: session.id,
-        cols: dims.cols,
-        rows: dims.rows,
-      })
+    if (active) {
+      const dims = getDimensions()
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        wsClient.send({
+          type: 'resize',
+          sessionId: session.id,
+          cols: dims.cols,
+          rows: dims.rows,
+        })
+      }
     }
 
     return () => {
       onResizeDisposable.dispose()
     }
-  }, [terminal, wsClient, session.id, getDimensions])
+  }, [terminal, wsClient, session.id, getDimensions, active])
 
   const startRename = useCallback(() => {
     setRenameValue(session.name)
@@ -215,7 +230,7 @@ export function TerminalView({
     <div
       style={{
         height: '100%',
-        display: 'flex',
+        display: active ? 'flex' : 'none',
         flexDirection: 'column',
         background: '#0a0a0a',
         overflow: 'hidden',
