@@ -1,6 +1,18 @@
-import Database from 'better-sqlite3';
+import Database from 'libsql';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+
+/** Statement with typed bind params and result (libsql compat layer) */
+interface TypedStatement<Bind extends unknown[], Result = unknown> {
+  run(...params: Bind): Database.RunResult;
+  get(...params: Bind): Result | undefined;
+  all(...params: Bind): Result[];
+  pluck(toggleState?: boolean): this;
+  expand(toggleState?: boolean): this;
+  raw(toggleState?: boolean): this;
+  bind(...params: Bind): this;
+  safeIntegers(toggleState?: boolean): this;
+}
 
 export interface PtySessionRow {
   id: string;
@@ -26,26 +38,26 @@ export interface BiometricRow {
 }
 
 export interface DbStatements {
-  insertBootstrapToken: Database.Statement<[string, string]>;
-  getBootstrapToken: Database.Statement<[string], { id: string; hash: string; created_at: string }>;
-  deleteBootstrapToken: Database.Statement<[string]>;
-  insertSession: Database.Statement<[string, string, string]>;
-  updateSessionLastSeen: Database.Statement<[string]>;
-  getSession: Database.Statement<[string], { id: string; jwt_id: string; email: string; created_at: string; last_seen: string }>;
-  insertPtySession: Database.Statement<[string, string, string, string, string]>;
-  getPtySession: Database.Statement<[string], PtySessionRow>;
-  listPtySessions: Database.Statement<[], PtySessionRow>;
-  updatePtySession: Database.Statement<[string, string, string]>;
-  deletePtySession: Database.Statement<[string]>;
-  deleteAllPtySessions: Database.Statement<[]>;
-  getPassword: Database.Statement<[], PasswordRow>;
-  upsertPassword: Database.Statement<[string]>;
-  deletePassword: Database.Statement<[]>;
-  getBiometric: Database.Statement<[], BiometricRow>;
-  upsertBiometric: Database.Statement<[string, string]>;
-  deleteBiometric: Database.Statement<[]>;
-  getClientHash: Database.Statement<[], { id: number; hash: string }>;
-  upsertClientHash: Database.Statement<[string]>;
+  insertBootstrapToken: TypedStatement<[string, string]>;
+  getBootstrapToken: TypedStatement<[string], { id: string; hash: string; created_at: string }>;
+  deleteBootstrapToken: TypedStatement<[string]>;
+  insertSession: TypedStatement<[string, string, string]>;
+  updateSessionLastSeen: TypedStatement<[string]>;
+  getSession: TypedStatement<[string], { id: string; jwt_id: string; email: string; created_at: string; last_seen: string }>;
+  insertPtySession: TypedStatement<[string, string, string, string, string]>;
+  getPtySession: TypedStatement<[string], PtySessionRow>;
+  listPtySessions: TypedStatement<[], PtySessionRow>;
+  updatePtySession: TypedStatement<[string, string, string]>;
+  deletePtySession: TypedStatement<[string]>;
+  deleteAllPtySessions: TypedStatement<[]>;
+  getPassword: TypedStatement<[], PasswordRow>;
+  upsertPassword: TypedStatement<[string]>;
+  deletePassword: TypedStatement<[]>;
+  getBiometric: TypedStatement<[], BiometricRow>;
+  upsertBiometric: TypedStatement<[string, string]>;
+  deleteBiometric: TypedStatement<[]>;
+  getClientHash: TypedStatement<[], { id: number; hash: string }>;
+  upsertClientHash: TypedStatement<[string]>;
 }
 
 export interface DbContext {
@@ -119,7 +131,9 @@ export function initDatabase(dbPath: string): DbContext {
   `);
 
   // Prepare statements for repeated use
-  const statements: DbStatements = {
+  // Cast needed: libsql's prepare() returns Statement<Bind> without result typing;
+  // our TypedStatement adds typed get()/all() return values.
+  const statements = {
     insertBootstrapToken: db.prepare(
       'INSERT INTO bootstrap_tokens (id, hash) VALUES (?, ?)',
     ),
@@ -183,7 +197,7 @@ export function initDatabase(dbPath: string): DbContext {
       `INSERT INTO lock_client_hash (id, hash) VALUES (1, ?)
        ON CONFLICT (id) DO UPDATE SET hash = excluded.hash`,
     ),
-  };
+  } as unknown as DbStatements;
 
   return { db, statements };
 }
