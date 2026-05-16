@@ -33,6 +33,6 @@
     "@clsh/web": "0.0.5"
   },
   "devDependencies": {
-    "tsx": "^4.19.0"
+    "tsx": "^4.22.0"
   }
 }

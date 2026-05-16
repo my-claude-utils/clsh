@@ -42,11 +42,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.1.0",
-    "prettier": "^3.3.0",
-    "turbo": "^2.8.20",
-    "typescript": "^5.7.0",
-    "typescript-eslint": "^8.57.1"
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "turbo": "^2.9.14",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.3"
   },
   "engines": {
     "node": ">=20.0.0"
